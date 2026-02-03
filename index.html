@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>C Code to PDF - Premium Highlighter</title>
+    <meta name="description" content="Converti il tuo codice C in un PDF formattato con evidenziazione della sintassi.">
+    <link rel="stylesheet" href="style.css">
+    <!-- Prism.js Tomorrow Night Theme (Offline) -->
+    <link rel="stylesheet" href="lib/prism-tomorrow.min.css">
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <h1>C Code Visualizer</h1>
+            <p class="subtitle">Incolla il tuo codice C, visualizzalo con syntax highlighting e scaricalo in PDF.</p>
+        </header>
+
+        <section class="customization-section">
+            <div class="section-header">
+                <span class="section-title">1. Informazioni Documento</span>
+                <div class="controls-mini">
+                    <button id="download-btn-top" class="btn btn-primary btn-sm">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="7 10 12 15 17 10"></polyline>
+                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                        </svg>
+                        Scarica PDF
+                    </button>
+                </div>
+            </div>
+            <div class="customization-grid">
+                <div class="input-group">
+                    <label for="project-title">Titolo del Progetto</label>
+                    <input type="text" id="project-title" placeholder="Esempio: Socket in C" value="Codice Sorgente C">
+                </div>
+                <div class="input-group">
+                    <label>Logo</label>
+                    <div class="file-input-wrapper">
+                        <input type="file" id="logo-upload" accept="image/*" class="hidden">
+                        <button type="button" class="btn btn-secondary btn-sm"
+                            onclick="document.getElementById('logo-upload').click()">
+                            Carica
+                        </button>
+                        <div id="logo-status" class="status-text">Mancante</div>
+                    </div>
+                </div>
+                <div class="input-group">
+                    <label for="school-name">Scuola / Istituto</label>
+                    <input type="text" id="school-name" placeholder="Esempio: ITI G. Marconi">
+                </div>
+                <div class="input-group">
+                    <label for="student-info">Studente / Classe</label>
+                    <input type="text" id="student-info" placeholder="Esempio: Mario Rossi - 4A INF">
+                </div>
+            </div>
+            <div class="input-group exercise-group">
+                <label for="exercise-text">Traccia dell'Esercizio</label>
+                <textarea id="exercise-text" placeholder="Incolla qui la traccia..." rows="2"></textarea>
+            </div>
+        </section>
+
+        <main class="main-content">
+            <section class="editor-section">
+                <div class="section-header">
+                    <span class="section-title">Editor C</span>
+                </div>
+                <textarea id="code-input" placeholder="// Scrivi il tuo codice C qui..." spellcheck="false">#include <stdio.h>
+
+int main() {
+    printf("Ciao Mondo!\n");
+    return 0;
+}</textarea>
+            </section>
+
+            <section class="preview-section">
+                <div class="section-header">
+                    <span class="section-title">Anteprima</span>
+                </div>
+                <div class="preview-container" id="real-time-preview">
+                    <div class="pdf-page-mock">
+                        <div class="pdf-custom-header">
+                            <div id="pdf-logo-container"></div>
+                            <div class="pdf-info-text">
+                                <div id="pdf-school-display"></div>
+                                <div id="pdf-student-display"></div>
+                            </div>
+                        </div>
+                        <div id="pdf-exercise-container" class="pdf-exercise-box hidden">
+                            <div class="pdf-exercise-label">Consegna Esercizio:</div>
+                            <div id="pdf-exercise-display"></div>
+                        </div>
+                        <div class="pdf-header">
+                            <h2 id="pdf-title-display">Codice Sorgente C</h2>
+                        </div>
+                        <pre><code id="code-output" class="language-c"></code></pre>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+    </div>
+
+
+
+    <!-- Libraries (Offline) -->
+    <script src="lib/prism.min.js"></script>
+    <script src="lib/prism-c.min.js"></script>
+    <script src="lib/jspdf.umd.min.js"></script>
+    <script src="lib/html2canvas.min.js"></script>
+    <script src="app.js"></script>
+</body>
+
+</html>
