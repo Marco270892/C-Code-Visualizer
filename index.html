@@ -9,13 +9,90 @@
     <link rel="stylesheet" href="style.css">
     <!-- Prism.js Tomorrow Night Theme (Offline) -->
     <link rel="stylesheet" href="lib/prism-tomorrow.min.css">
+    <!-- MathJax for LaTeX support -->
+    <script>
+        window.MathJax = {
+            tex: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\\[', '\\]']],
+                processEscapes: true
+            },
+            options: {
+                ignoreHtmlClass: 'tex2jax_ignore',
+                processHtmlClass: 'tex2jax_process'
+            }
+        };
+    </script>
+    <script id="MathJax-script" async src="lib/mathjax.min.js"></script>
+    <!-- Chart.js for graphs -->
+    <script src="lib/chart.min.js"></script>
 </head>
 
 <body>
-    <div class="container">
+    <!-- Home Screen Selection -->
+    <div id="home-screen" class="home-container">
+        <header class="home-header">
+            <h1>Select Your Task</h1>
+            <p class="subtitle">Scegli il tipo di documento che vuoi creare oggi</p>
+        </header>
+
+        <div class="mode-selector">
+            <div class="mode-card" id="mode-code">
+                <div class="mode-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="16 18 22 12 16 6"></polyline>
+                        <polyline points="8 6 2 12 8 18"></polyline>
+                    </svg>
+                </div>
+                <h3>Software Developer</h3>
+                <p>Formatta il tuo codice C con syntax highlighting professionale.</p>
+                <button class="btn btn-primary">Inizia Codice</button>
+            </div>
+
+            <div class="mode-card" id="mode-lab">
+                <div class="mode-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                        <polyline points="14 2 14 8 20 8"></polyline>
+                        <line x1="16" y1="13" x2="8" y2="13"></line>
+                        <line x1="16" y1="17" x2="8" y2="17"></line>
+                        <polyline points="10 9 9 9 8 9"></polyline>
+                    </svg>
+                </div>
+                <h3>Lab Specialist</h3>
+                <p>Crea relazioni tecniche di laboratorio complete e ordinate.</p>
+                <button class="btn btn-primary">Inizia Laboratorio</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Application Screen -->
+    <div id="app-screen" class="container hidden">
         <header>
-            <h1>C Code Visualizer</h1>
-            <p class="subtitle">Incolla il tuo codice C, visualizzalo con syntax highlighting e scaricalo in PDF.</p>
+            <div class="header-top">
+                <button id="back-to-home" class="btn btn-secondary btn-sm">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="19" y1="12" x2="5" y2="12"></line>
+                        <polyline points="12 19 5 12 12 5"></polyline>
+                    </svg>
+                    Torna Home
+                </button>
+                <h1 id="app-type-title">C Code Visualizer</h1>
+                <button id="info-btn" class="btn btn-secondary btn-sm" style="position: absolute; right: 0;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="12" y1="16" x2="12" y2="12"></line>
+                        <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                    </svg>
+                    Info Guide
+                </button>
+            </div>
+            <p id="app-type-subtitle" class="subtitle">Incolla il tuo codice C, visualizzalo con syntax highlighting e
+                scaricalo in PDF.</p>
         </header>
 
         <section class="customization-section">
@@ -57,10 +134,75 @@
                     <label for="student-info">Studente / Classe</label>
                     <input type="text" id="student-info" placeholder="Esempio: Mario Rossi - 4A INF">
                 </div>
+                <div class="input-group">
+                    <label for="doc-date">Data</label>
+                    <input type="date" id="doc-date">
+                </div>
             </div>
             <div class="input-group exercise-group">
                 <label for="exercise-text">Traccia dell'Esercizio</label>
                 <textarea id="exercise-text" placeholder="Incolla qui la traccia..." rows="2"></textarea>
+            </div>
+
+
+            <div id="lab-details-fields" class="hidden">
+                <div class="customization-grid lab-grid" style="grid-template-columns: repeat(2, 1fr);">
+                    <div class="input-group">
+                        <label for="lab-objectives">Obiettivi</label>
+                        <textarea id="lab-objectives" placeholder="Obiettivi dell'esercitazione..." rows="2"></textarea>
+                    </div>
+                    <div class="input-group">
+                        <label for="lab-materials">Materiali</label>
+                        <textarea id="lab-materials" placeholder="Es: Componenti elettronici, reagenti..."
+                            rows="2"></textarea>
+                    </div>
+                </div>
+                <div class="customization-grid lab-grid"
+                    style="grid-template-columns: repeat(2, 1fr); margin-top: 10px;">
+                    <div class="input-group">
+                        <label for="lab-tools">Strumenti / Hardware</label>
+                        <textarea id="lab-tools" placeholder="Es: Oscilloscopio, Multimetro, Arduino..."
+                            rows="2"></textarea>
+                    </div>
+                    <div class="input-group">
+                        <label for="lab-software">Software / App</label>
+                        <textarea id="lab-software" placeholder="Es: VS Code, MATLAB, Tinkercad..." rows="2"></textarea>
+                    </div>
+                </div>
+                <div class="input-group exercise-group">
+                    <label for="lab-description">Descrizione Attività / Procedimento</label>
+                    <textarea id="lab-description" placeholder="Descrivi i passaggi svolti..." rows="3"></textarea>
+                </div>
+                <div class="input-group exercise-group">
+                    <label for="lab-conclusions">Conclusioni / Risultati</label>
+                    <textarea id="lab-conclusions" placeholder="Osservazioni finali..." rows="2"></textarea>
+                </div>
+
+                <div class="lab-calculations-section">
+                    <span class="section-title-small">Analisi, Calcoli e Formule Libere</span>
+                    <div class="input-group">
+                        <label for="lab-calculations">Inserisci qui calcoli o formule (anche in LaTeX)</label>
+                        <textarea id="lab-calculations"
+                            placeholder="Esempio: Calcolo della pendenza $m = \frac{\Delta y}{\Delta x}$..."
+                            rows="4"></textarea>
+                    </div>
+                </div>
+
+                <div id="lab-charts-input-container">
+                    <!-- Qui verranno aggiunti i blocchi dei grafici -->
+                </div>
+
+                <div class="add-chart-wrapper">
+                    <button type="button" id="add-chart-btn" class="btn btn-secondary btn-sm"
+                        style="margin-bottom: 20px;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                        Aggiungi Nuova Tabella/Grafico
+                    </button>
+                </div>
             </div>
         </section>
 
@@ -88,15 +230,59 @@ int main() {
                             <div class="pdf-info-text">
                                 <div id="pdf-school-display"></div>
                                 <div id="pdf-student-display"></div>
+                                <div id="pdf-date-display" class="pdf-date"></div>
                             </div>
                         </div>
+
+                        <div class="pdf-main-title">
+                            <h2 id="pdf-title-display">Relazione di Laboratorio</h2>
+                        </div>
+
                         <div id="pdf-exercise-container" class="pdf-exercise-box hidden">
-                            <div class="pdf-exercise-label">Consegna Esercizio:</div>
+                            <div class="pdf-exercise-label">Consegna:</div>
                             <div id="pdf-exercise-display"></div>
                         </div>
-                        <div class="pdf-header">
-                            <h2 id="pdf-title-display">Codice Sorgente C</h2>
+
+                        <!-- Sezioni Laboratorio nel PDF -->
+                        <div id="pdf-lab-objectives-container" class="pdf-lab-section hidden">
+                            <div class="pdf-lab-label">Obiettivi:</div>
+                            <div id="pdf-lab-objectives-display"></div>
                         </div>
+
+                        <div id="pdf-lab-materials-container" class="pdf-lab-section hidden">
+                            <div class="pdf-lab-label">Materiali:</div>
+                            <div id="pdf-lab-materials-display"></div>
+                        </div>
+
+                        <div id="pdf-lab-tools-container" class="pdf-lab-section hidden">
+                            <div class="pdf-lab-label">Strumenti e Hardware:</div>
+                            <div id="pdf-lab-tools-display"></div>
+                        </div>
+
+                        <div id="pdf-lab-software-container" class="pdf-lab-section hidden">
+                            <div class="pdf-lab-label">Software:</div>
+                            <div id="pdf-lab-software-display"></div>
+                        </div>
+
+                        <div id="pdf-lab-description-container" class="pdf-lab-section hidden">
+                            <div class="pdf-lab-label">Descrizione Attività:</div>
+                            <div id="pdf-lab-description-display"></div>
+                        </div>
+
+                        <div id="pdf-lab-calculations-container" class="pdf-lab-section hidden">
+                            <div class="pdf-lab-label">Analisi e Calcoli:</div>
+                            <div id="pdf-lab-calculations-display"></div>
+                        </div>
+
+                        <div id="pdf-dynamic-charts-container">
+                            <!-- Qui verranno iniettati dinamicamente tabelle e grafici -->
+                        </div>
+
+                        <div id="pdf-lab-conclusions-container" class="pdf-lab-section hidden">
+                            <div class="pdf-lab-label">Conclusioni:</div>
+                            <div id="pdf-lab-conclusions-display"></div>
+                        </div>
+
                         <pre><code id="code-output" class="language-c"></code></pre>
                     </div>
                 </div>
@@ -107,7 +293,22 @@ int main() {
 
 
 
-    <!-- Libraries (Offline) -->
+    <!-- Help Modal -->
+    <div id="info-modal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-title">Guida alla Compilazione</h2>
+                <button id="close-modal" class="btn-close">&times;</button>
+            </div>
+            <div id="modal-body" class="modal-body">
+                <!-- Content will be injected by JS -->
+            </div>
+            <div class="modal-footer">
+                <button id="close-modal-btn" class="btn btn-primary">Ho capito</button>
+            </div>
+        </div>
+    </div>
+
     <script src="lib/prism.min.js"></script>
     <script src="lib/prism-c.min.js"></script>
     <script src="lib/jspdf.umd.min.js"></script>
