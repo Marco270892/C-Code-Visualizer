@@ -530,10 +530,9 @@ code {
     font-weight: 800;
     text-transform: uppercase;
     letter-spacing: 2px;
-    background: linear-gradient(to right, #38bdf8, #818cf8);
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
+    color: var(--accent-color);
+    /* Usiamo colore solido per compatibilità PDF */
+    text-align: center;
 }
 
 .pdf-exercise-box {

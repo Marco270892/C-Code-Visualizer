@@ -80,7 +80,7 @@ document.addEventListener('DOMContentLoaded', () => {
         },
         // Pulsanti Download e Info
         btns: {
-            download: [document.getElementById('download-btn'), document.getElementById('download-btn-top')],
+            download: [document.getElementById('download-btn'), document.getElementById('download-btn-top')].filter(btn => btn !== null),
             info: document.getElementById('info-btn')
         },
         // Modal Help
@@ -508,7 +508,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         async generatePDF() {
             const btns = UI.btns.download;
-            btns.forEach(b => { b.disabled = true; b.textContent = "Generazione..."; });
+            btns.forEach(b => { if (b) { b.disabled = true; b.textContent = "Generazione..."; } });
 
             try {
                 const title = prompt("Titolo file PDF:", UI.inputs.title.value) || "Documento";
@@ -526,7 +526,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
                 pdf.save(`${title.toLowerCase().replace(/ /g, '_')}.pdf`);
             } catch (e) { console.error(e); alert("Errore generazione PDF."); }
-            finally { btns.forEach(b => { b.disabled = false; b.textContent = "Scarica PDF"; }); }
+            finally { btns.forEach(b => { if (b) { b.disabled = false; b.textContent = "Scarica PDF"; } }); }
         }
     };
 
