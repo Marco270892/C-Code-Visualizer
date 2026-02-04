@@ -521,17 +521,25 @@ document.addEventListener('DOMContentLoaded', () => {
             btns.forEach(b => { if (b) { b.disabled = true; b.textContent = "Generazione..."; } });
 
             try {
-                await new Promise(r => setTimeout(r, 100)); // Feedback UI
+                // 1. Attendi caricamento font e risorse
+                await document.fonts.ready;
+                // Attendiamo un attimo extra per rendering layout
+                await new Promise(r => setTimeout(r, 500));
 
                 const title = prompt("Titolo file PDF:", UI.inputs.title.value) || "Documento";
                 const element = document.querySelector('.pdf-page-mock');
+
+                // 2. Assicura che l'elemento sia visibile e scrollato
                 window.scrollTo(0, 0);
 
                 const canvas = await html2canvas(element, {
                     scale: 2,
                     backgroundColor: '#1e293b',
-                    useCORS: true,
-                    logging: false
+                    useCORS: true, // Fondamentale per GitHub Pages
+                    logging: true,  // Abilita log per debug
+                    allowTaint: false,
+                    scrollX: 0,
+                    scrollY: -window.scrollY // Fix posizione se scrollato
                 });
 
                 const imgData = canvas.toDataURL('image/png');
@@ -544,8 +552,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
                 pdf.save(`${title.toLowerCase().replace(/ /g, '_')}.pdf`);
             } catch (e) {
-                console.error(e);
-                alert("Si è verificato un errore durante la creazione del PDF:\n" + e.message);
+                console.error("PDF Error:", e);
+                alert("Ops! Errore generazione PDF. Dettagli: " + e.message);
+                // Se siamo su GitHub Pages, potrebbe essere un problema di immagini esterne o font
             } finally {
                 btns.forEach(b => { if (b) { b.disabled = false; b.textContent = "Scarica PDF"; } });
             }
