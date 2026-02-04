@@ -517,6 +517,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const canvas = await html2canvas(element, { scale: 2, backgroundColor: '#1e293b', useCORS: true });
                 const imgData = canvas.toDataURL('image/png');
+                if (!window.jspdf) {
+                    alert("Errore: Libreria PDF non caricata. Controlla la connessione internet.");
+                    return;
+                }
                 const { jsPDF } = window.jspdf;
 
                 const pdfWidth = 595;
