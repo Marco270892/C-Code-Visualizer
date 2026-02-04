@@ -508,19 +508,33 @@ document.addEventListener('DOMContentLoaded', () => {
 
         async generatePDF() {
             const btns = UI.btns.download;
+
+            if (!window.html2canvas) {
+                alert("Errore Critico: La libreria 'html2canvas' non è stata caricata. Ricarica la pagina.");
+                return;
+            }
+            if (!window.jspdf) {
+                alert("Errore Critico: La libreria 'jspdf' non è stata caricata. Ricarica la pagina.");
+                return;
+            }
+
             btns.forEach(b => { if (b) { b.disabled = true; b.textContent = "Generazione..."; } });
 
             try {
+                await new Promise(r => setTimeout(r, 100)); // Feedback UI
+
                 const title = prompt("Titolo file PDF:", UI.inputs.title.value) || "Documento";
                 const element = document.querySelector('.pdf-page-mock');
                 window.scrollTo(0, 0);
 
-                const canvas = await html2canvas(element, { scale: 2, backgroundColor: '#1e293b', useCORS: true });
+                const canvas = await html2canvas(element, {
+                    scale: 2,
+                    backgroundColor: '#1e293b',
+                    useCORS: true,
+                    logging: false
+                });
+
                 const imgData = canvas.toDataURL('image/png');
-                if (!window.jspdf) {
-                    alert("Errore: Libreria PDF non caricata. Controlla la connessione internet.");
-                    return;
-                }
                 const { jsPDF } = window.jspdf;
 
                 const pdfWidth = 595;
@@ -529,8 +543,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
                 pdf.save(`${title.toLowerCase().replace(/ /g, '_')}.pdf`);
-            } catch (e) { console.error(e); alert("Errore generazione PDF."); }
-            finally { btns.forEach(b => { if (b) { b.disabled = false; b.textContent = "Scarica PDF"; } }); }
+            } catch (e) {
+                console.error(e);
+                alert("Si è verificato un errore durante la creazione del PDF:\n" + e.message);
+            } finally {
+                btns.forEach(b => { if (b) { b.disabled = false; b.textContent = "Scarica PDF"; } });
+            }
         }
     };
 
