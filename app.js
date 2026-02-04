@@ -433,6 +433,10 @@ document.addEventListener('DOMContentLoaded', () => {
             if (mode === 'plc') {
                 UI.plcInputs.cpu.value = localStorage.getItem(prefix + 'cpu') || '';
                 UI.plcInputs.env.value = localStorage.getItem(prefix + 'env') || 'Tia Portal';
+                // Restore logic moved to switchMode, but re-applying visibility here just in case init sequence matters
+                if (UI.inputs.importPlcBtn) UI.inputs.importPlcBtn.classList.remove('hidden');
+            } else {
+                if (UI.inputs.importPlcBtn) UI.inputs.importPlcBtn.classList.add('hidden');
             }
 
             if (mode === 'lab') {
@@ -820,6 +824,12 @@ document.addEventListener('DOMContentLoaded', () => {
             window.Render = Renderer;
 
             // Mermaid initial config removed (handled by flowchart.js or not needed)
+
+            // Initial Mode Setup
+            // Restore import button visibility based on stored/initial mode
+            if (State.mode === 'plc' && UI.inputs.importPlcBtn) {
+                UI.inputs.importPlcBtn.classList.remove('hidden');
+            }
 
             // Create Debounced Update Function for heavy rendering
             const debouncedUpdate = Utils.debounce(() => {
