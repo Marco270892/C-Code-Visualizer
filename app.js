@@ -1063,11 +1063,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const type = c.type;
             const pts = [];
-            // Two-pin components (most)
-            if (['resistor', 'potentiometer', 'capacitor', 'inductor', 'diode', 'led', 'diode-led', 'diode-zener', 'diode-schottky', 'diode-photo', 'diode-tvs', 'varactor', 'battery', 'acsource', 'bulb', 'switch', 'voltmeter', 'ammeter', 'multimeter'].includes(type)) {
+
+            if (type === 'potentiometer') {
+                pts.push(getPos(-20, 0), getPos(20, 0), getPos(0, -20));
+            } else if (['resistor', 'capacitor', 'inductor', 'diode', 'led', 'diode-led', 'diode-zener', 'diode-schottky', 'diode-photo', 'diode-tvs', 'varactor', 'battery', 'acsource', 'bulb', 'switch', 'voltmeter', 'ammeter', 'multimeter', 'scr', 'diac', 'triac'].includes(type)) {
                 let d = 20;
-                if (['capacitor', 'inductor', 'battery', 'acsource', 'switch', 'diode', 'led', 'diode-led', 'diode-zener', 'diode-schottky', 'diode-photo', 'diode-tvs', 'varactor'].includes(type)) d = 15;
+                if (['capacitor', 'inductor', 'battery', 'acsource', 'switch', 'diode', 'led', 'diode-led', 'diode-zener', 'diode-schottky', 'diode-photo', 'diode-tvs', 'varactor', 'scr', 'diac', 'triac'].includes(type)) d = 15;
                 pts.push(getPos(-d, 0), getPos(d, 0));
+
+                // Extra pin for SCR/TRIAC
+                if (type === 'scr') pts.push(getPos(-10, 15));
+                if (type === 'triac') pts.push(getPos(10, 15));
             } else if (type === 'transistor-npn' || type === 'transistor-pnp' || type === 'mosfet-n' || type === 'mosfet-p') {
                 pts.push(getPos(-15, 0), getPos(10, -15), getPos(10, 15));
             } else if (type === 'opamp') {
@@ -1125,12 +1131,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
 
-                const clickedCenter = this.components.find(c => Math.abs(c.x - pos.x) < 12 && Math.abs(c.y - pos.y) < 12);
-                if (clickedCenter) {
+                // 2. PRIORITÀ COMPONENTI (Controllo dell'intera area del componente)
+                const clickedComp = this.components.find(c => {
+                    // Calcolo hit-box basato sul tipo (standard 40x30 o simili)
+                    const halfW = 20, halfH = 15;
+                    return Math.abs(c.x - pos.x) < halfW && Math.abs(c.y - pos.y) < halfH;
+                });
+
+                if (clickedComp) {
                     this.dragType = 'component';
-                    this.selectedId = clickedCenter.id;
+                    this.selectedId = clickedComp.id;
                     this.isDragging = true;
-                    this.dragStart = { x: pos.x - clickedCenter.x, y: pos.y - clickedCenter.y };
+                    this.dragStart = { x: pos.x - clickedComp.x, y: pos.y - clickedComp.y };
                     this.draw();
                     return;
                 }
@@ -1397,11 +1409,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (isSelected || isHovered) {
                     this.ctx.beginPath();
-                    this.ctx.strokeStyle = isSelected ? '#38bdf8' : 'rgba(255, 255, 255, 0.15)';
-                    this.ctx.lineWidth = 1;
-                    this.ctx.setLineDash([3, 3]);
-                    // Box ancora più piccolo e discreto
-                    this.ctx.strokeRect(-18, -14, 36, 28);
+                    this.ctx.strokeStyle = isSelected ? '#38bdf8' : 'rgba(255, 255, 255, 0.3)';
+                    this.ctx.lineWidth = 1.5;
+                    this.ctx.setLineDash([4, 4]);
+
+                    // Calcola box dinamico basato sul tipo di componente
+                    let bw = 22, bh = 18;
+                    if (['resistor', 'potentiometer', 'diode', 'led', 'switch'].includes(c.type)) {
+                        bw = 25; bh = 12;
+                    } else if (['oscilloscope', 'powersupply', 'funcgen'].includes(c.type)) {
+                        bw = 25; bh = 20;
+                    }
+
+                    this.ctx.strokeRect(-bw, -bh, bw * 2, bh * 2);
                     this.ctx.setLineDash([]);
                 }
 
@@ -1659,17 +1679,36 @@ document.addEventListener('DOMContentLoaded', () => {
         },
 
         drawJunction(x, y) {
-            // Check if multiple wires or components meet here
-            let count = 0;
+            // Conta quante connessioni ci sono in questo punto esatto
+            let connections = 0;
+            const point = { x, y };
+
+            // 1. Controlla estremità dei fili
             this.wires.forEach(w => {
-                if ((w.x1 === x && w.y1 === y) || (w.x2 === x && w.y2 === y)) count++;
-            });
-            this.components.forEach(c => {
-                // Simplified terminal check (standard width is 40, terminals at +/- 20)
-                if (Math.abs(c.y - y) < 5 && (Math.abs(c.x + 20 - x) < 5 || Math.abs(c.x - 20 - x) < 5)) count++;
+                if ((w.x1 === x && w.y1 === y) || (w.x2 === x && w.y2 === y)) {
+                    connections++;
+                } else {
+                    // Controlla se l'estremità di UN ALTRO filo tocca il CORPO di questo filo (T-junction)
+                    const segments = this.getWireSegments(w);
+                    for (let i = 0; i < segments.length - 1; i++) {
+                        const dist = this.distToSegment(point, segments[i], segments[i + 1]);
+                        if (dist < 2) { // Il punto è sul segmento
+                            connections++;
+                            break;
+                        }
+                    }
+                }
             });
 
-            if (count > 2) {
+            // 2. Controlla terminali dei componenti
+            this.components.forEach(c => {
+                this.getComponentTerminals(c).forEach(t => {
+                    if (Math.abs(t.x - x) < 3 && Math.abs(t.y - y) < 3) connections++;
+                });
+            });
+
+            // Se ci sono più di 2 rami che si incontrano, disegna il punto di giunzione
+            if (connections > 2) {
                 this.ctx.beginPath();
                 this.ctx.fillStyle = '#94a3b8';
                 this.ctx.arc(x, y, 4, 0, Math.PI * 2);
