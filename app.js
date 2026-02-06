@@ -861,6 +861,7 @@ document.addEventListener('DOMContentLoaded', () => {
         components: [],
         wires: [], // Array of {x1, y1, x2, y2}
         selectedId: null,
+        hoverId: null, // NEW: Track hovered component
         tool: 'select',
         isDragging: false,
         dragStart: { x: 0, y: 0 },
@@ -973,8 +974,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const pos = this.getMousePos(e);
 
             if (this.tool === 'select') {
-                // Check collision
-                const clickedComp = this.components.find(c => Math.abs(c.x - pos.x) < 20 && Math.abs(c.y - pos.y) < 20);
+                // Check collision - Increased radius from 20 to 30 for easier selection
+                const clickedComp = this.components.find(c => Math.abs(c.x - pos.x) < 30 && Math.abs(c.y - pos.y) < 30);
                 if (clickedComp) {
                     this.selectedId = clickedComp.id;
                     this.isDragging = true;
@@ -1012,8 +1013,19 @@ document.addEventListener('DOMContentLoaded', () => {
         },
 
         onMouseMove(e) {
-            if (!this.isDragging) return;
             const pos = this.getMousePos(e);
+
+            // Hover detection
+            const hovered = this.components.find(c => Math.abs(c.x - pos.x) < 30 && Math.abs(c.y - pos.y) < 30);
+            const newHoverId = hovered ? hovered.id : null;
+
+            if (this.hoverId !== newHoverId) {
+                this.hoverId = newHoverId;
+                this.canvas.style.cursor = hovered ? 'pointer' : (this.tool === 'wire' ? 'crosshair' : 'default');
+                this.draw();
+            }
+
+            if (!this.isDragging) return;
 
             if (this.tool === 'select' && this.selectedId) {
                 const c = this.components.find(x => x.id === this.selectedId);
@@ -1047,7 +1059,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         onDoubleClick(e) {
             const pos = this.getMousePos(e);
-            const clickedComp = this.components.find(c => Math.abs(c.x - pos.x) < 20 && Math.abs(c.y - pos.y) < 20);
+            const clickedComp = this.components.find(c => Math.abs(c.x - pos.x) < 30 && Math.abs(c.y - pos.y) < 30);
             if (clickedComp) {
                 clickedComp.rotation = (clickedComp.rotation + 90) % 360;
                 this.draw();
@@ -1079,10 +1091,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 this.ctx.translate(c.x, c.y);
                 this.ctx.rotate((c.rotation * Math.PI) / 180);
 
-                // Highlight if selected
+                // Visual feedback: Highlight if selected or hovered
                 if (c.id === this.selectedId) {
-                    this.ctx.shadowBlur = 10;
+                    this.ctx.shadowBlur = 15;
                     this.ctx.shadowColor = '#38bdf8';
+
+                    // Add a selection ring
+                    this.ctx.beginPath();
+                    this.ctx.strokeStyle = 'rgba(56, 189, 248, 0.5)';
+                    this.ctx.setLineDash([5, 5]);
+                    this.ctx.arc(0, 0, 25, 0, Math.PI * 2);
+                    this.ctx.stroke();
+                    this.ctx.setLineDash([]);
+                } else if (c.id === this.hoverId) {
+                    this.ctx.shadowBlur = 10;
+                    this.ctx.shadowColor = 'rgba(255, 255, 255, 0.5)';
                 }
 
                 this.drawComponent(c.type, c);
@@ -1096,7 +1119,7 @@ document.addEventListener('DOMContentLoaded', () => {
             this.ctx.fillStyle = '#f8fafc';
             this.ctx.beginPath();
 
-            if (type === 'resistor') {
+            if (type === 'resistor' || type === 'potentiometer') {
                 this.ctx.moveTo(-15, 0);
                 this.ctx.lineTo(-12, -5);
                 this.ctx.lineTo(-8, 5);
@@ -1107,6 +1130,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 this.ctx.lineTo(12, -5);
                 this.ctx.lineTo(15, 0);
                 this.ctx.stroke();
+
+                if (type === 'potentiometer') {
+                    // Disegna la freccia del cursore (wiper)
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(0, 15);
+                    this.ctx.lineTo(0, 7);
+                    // Punta della freccia
+                    this.ctx.lineTo(-3, 10);
+                    this.ctx.moveTo(0, 7);
+                    this.ctx.lineTo(3, 10);
+                    this.ctx.stroke();
+                }
             } else if (type === 'capacitor') {
                 this.ctx.moveTo(-4, -10); this.ctx.lineTo(-4, 10);
                 this.ctx.moveTo(4, -10); this.ctx.lineTo(4, 10);
