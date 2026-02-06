@@ -463,7 +463,23 @@ document.addEventListener('DOMContentLoaded', () => {
     const Parser = {
         markdown(text) {
             if (!text) return "";
-            return text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+
+            let formatted = text;
+
+            // 1. Supporto Elenchi Puntati (righe che iniziano con - o *)
+            // Usiamo una regex che trova l'inizio riga e sostituisce con un pallino
+            formatted = formatted.replace(/^[\-\*]\s+/gm, '• ');
+
+            // NEW: Supporto per separatori usati dall'utente (— o --) che indicano nuovi punti
+            // Se troviamo '—' o '--' in mezzo al testo, aggiungiamo un a capo prima per chiarezza (come richiesto per Materiali e Calcoli)
+            formatted = formatted.replace(/([^\n])\s*—\s*/g, '$1<br>— ');
+            formatted = formatted.replace(/([^\n])\s*--\s*/g, '$1<br>• ');
+
+            // 2. Grassetto (**testo**)
+            formatted = formatted.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+
+            // 3. Newlines (gestisce a capo, mantenendo compatibilità con MathJax)
+            return formatted.replace(/\n/g, '<br>');
         }
     };
 
@@ -573,6 +589,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const contentDiv = document.createElement('div');
                 contentDiv.style.paddingLeft = '5px';
+                contentDiv.style.whiteSpace = 'pre-wrap'; // Fix per invio a capo
                 contentDiv.innerHTML = Parser.markdown(value);
 
                 sectionDiv.appendChild(labelDiv);
@@ -587,6 +604,7 @@ document.addEventListener('DOMContentLoaded', () => {
             createSection("Descrizione Attività:", UI.labInputs.description.value);
             createSection("Analisi e Calcoli:", UI.labInputs.calculations.value);
 
+
             // Render Charts
             if (State.charts.length > 0) {
                 const chartsWrapper = document.createElement('div');
@@ -594,7 +612,23 @@ document.addEventListener('DOMContentLoaded', () => {
                 container.appendChild(chartsWrapper);
             }
 
-
+            // Render Circuit Diagram (Beta)
+            if (window.CircuitEditor) {
+                const circuitImg = CircuitEditor.getImage();
+                if (circuitImg) {
+                    const sectionDiv = document.createElement('div');
+                    sectionDiv.className = 'pdf-lab-section';
+                    sectionDiv.innerHTML = '<div class="pdf-lab-label">Schema Elettrico:</div>';
+                    const img = document.createElement('img');
+                    img.src = circuitImg;
+                    img.style.maxWidth = '100%';
+                    img.style.marginTop = '10px';
+                    img.style.border = '1px solid rgba(255,255,255,0.1)';
+                    img.style.borderRadius = '4px';
+                    sectionDiv.appendChild(img);
+                    container.appendChild(sectionDiv);
+                }
+            }
 
             // Trigger MathJax if needed
             if (window.MathJax) {
@@ -816,12 +850,469 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // ==========================================
+    // 6.5 CIRCUIT EDITOR
+    // ==========================================
+    const CircuitEditor = {
+        canvas: null,
+        ctx: null,
+        width: 800,
+        height: 400,
+        gridSize: 20,
+        components: [],
+        wires: [], // Array of {x1, y1, x2, y2}
+        selectedId: null,
+        tool: 'select',
+        isDragging: false,
+        dragStart: { x: 0, y: 0 },
+        tempWire: null,
+
+        init() {
+            this.canvas = document.getElementById('circuit-canvas');
+            if (!this.canvas) return;
+            this.ctx = this.canvas.getContext('2d');
+
+            // Mouse Events
+            this.canvas.addEventListener('mousedown', (e) => this.onMouseDown(e));
+            window.addEventListener('mousemove', (e) => this.onMouseMove(e));
+            window.addEventListener('mouseup', (e) => this.onMouseUp(e));
+            this.canvas.addEventListener('dblclick', (e) => this.onDoubleClick(e));
+
+            // Toolbar & Dropdowns
+            document.querySelectorAll('.circuit-tool').forEach(btn => {
+                btn.onclick = (e) => {
+                    if (btn.classList.contains('dropdown-trigger')) {
+                        const menu = btn.parentElement.querySelector('.circuit-submenu');
+                        const isVisible = menu.classList.contains('show');
+                        document.querySelectorAll('.circuit-submenu').forEach(m => m.classList.remove('show'));
+                        if (!isVisible) menu.classList.add('show');
+                        e.stopPropagation();
+                        return;
+                    }
+
+                    document.querySelectorAll('.circuit-tool').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    this.tool = btn.dataset.tool;
+                    document.querySelectorAll('.circuit-submenu').forEach(m => m.classList.remove('show'));
+
+                    const status = document.getElementById('circuit-status');
+                    if (status) status.textContent = 'Strumento: ' + (btn.title || this.tool);
+                };
+            });
+
+            document.querySelectorAll('.submenu-item').forEach(item => {
+                item.onclick = (e) => {
+                    const container = item.closest('.circuit-dropdown-container');
+                    const trigger = container.querySelector('.dropdown-trigger');
+                    document.querySelectorAll('.circuit-tool').forEach(b => b.classList.remove('active'));
+                    trigger.classList.add('active');
+                    this.tool = item.dataset.tool;
+                    container.querySelector('.circuit-submenu').classList.remove('show');
+
+                    const status = document.getElementById('circuit-status');
+                    if (status) status.textContent = 'Strumento: ' + item.textContent;
+                    e.stopPropagation();
+                };
+            });
+
+            window.addEventListener('click', () => {
+                document.querySelectorAll('.circuit-submenu').forEach(m => m.classList.remove('show'));
+            });
+
+            // Actions
+            const btnClear = document.getElementById('circuit-clear');
+            if (btnClear) btnClear.addEventListener('click', () => {
+                if (confirm("Cancellare tutto il circuito?")) {
+                    this.components = [];
+                    this.wires = [];
+                    this.draw();
+                    Renderer.updateAll();
+                }
+            });
+
+            const btnDelete = document.getElementById('circuit-delete');
+            if (btnDelete) btnDelete.addEventListener('click', () => {
+                if (this.selectedId) {
+                    this.components = this.components.filter(c => c.id !== this.selectedId);
+                    this.wires = this.wires.filter(w => w.id !== this.selectedId);
+                    this.selectedId = null;
+                    this.draw();
+                    Renderer.updateAll();
+                }
+            });
+
+            const btnRotate = document.getElementById('circuit-rotate');
+            if (btnRotate) btnRotate.addEventListener('click', () => {
+                if (this.selectedId) {
+                    const c = this.components.find(x => x.id === this.selectedId);
+                    if (c) {
+                        c.rotation = (c.rotation + 90) % 360;
+                        this.draw();
+                        Renderer.updateAll();
+                    }
+                }
+            });
+
+            // Initial Draw
+            this.draw();
+        },
+
+        getMousePos(evt) {
+            const rect = this.canvas.getBoundingClientRect();
+            return {
+                x: evt.clientX - rect.left,
+                y: evt.clientY - rect.top
+            };
+        },
+
+        snap(val) {
+            return Math.round(val / this.gridSize) * this.gridSize;
+        },
+
+        onMouseDown(e) {
+            if (e.target !== this.canvas) return;
+            const pos = this.getMousePos(e);
+
+            if (this.tool === 'select') {
+                // Check collision
+                const clickedComp = this.components.find(c => Math.abs(c.x - pos.x) < 20 && Math.abs(c.y - pos.y) < 20);
+                if (clickedComp) {
+                    this.selectedId = clickedComp.id;
+                    this.isDragging = true;
+                    this.dragStart = { x: pos.x - clickedComp.x, y: pos.y - clickedComp.y };
+                } else {
+                    this.selectedId = null;
+                }
+                this.draw();
+            } else if (this.tool === 'wire') {
+                this.isDragging = true;
+                this.tempWire = { x1: this.snap(pos.x), y1: this.snap(pos.y), x2: this.snap(pos.x), y2: this.snap(pos.y) };
+            } else {
+                // Place component
+                const newComp = {
+                    id: Date.now(),
+                    type: this.tool,
+                    x: this.snap(pos.x),
+                    y: this.snap(pos.y),
+                    rotation: 0
+                };
+                if (this.tool === 'text') {
+                    const t = prompt("Testo per etichetta:", "V1");
+                    if (t) newComp.text = t;
+                    else return;
+                }
+                this.components.push(newComp);
+                this.tool = 'select'; // Switch back to select
+                document.querySelectorAll('.circuit-tool').forEach(b => b.classList.remove('active'));
+                const selBtn = document.querySelector('[data-tool="select"]');
+                if (selBtn) selBtn.classList.add('active');
+
+                this.draw();
+                Renderer.updateAll(); // Update preview
+            }
+        },
+
+        onMouseMove(e) {
+            if (!this.isDragging) return;
+            const pos = this.getMousePos(e);
+
+            if (this.tool === 'select' && this.selectedId) {
+                const c = this.components.find(x => x.id === this.selectedId);
+                if (c) {
+                    c.x = this.snap(pos.x - this.dragStart.x);
+                    c.y = this.snap(pos.y - this.dragStart.y);
+                    this.draw();
+                }
+            } else if (this.tool === 'wire' && this.tempWire) {
+                this.tempWire.x2 = this.snap(pos.x);
+                this.tempWire.y2 = this.snap(pos.y);
+                this.draw();
+            }
+        },
+
+        onMouseUp(e) {
+            if (this.isDragging) {
+                if (this.tool === 'wire' && this.tempWire) {
+                    if (this.tempWire.x1 !== this.tempWire.x2 || this.tempWire.y1 !== this.tempWire.y2) {
+                        this.wires.push({ ...this.tempWire, id: Date.now() });
+                    }
+                    this.tempWire = null;
+                    Renderer.updateAll();
+                } else if (this.tool === 'select') {
+                    Renderer.updateAll();
+                }
+                this.isDragging = false;
+                this.draw();
+            }
+        },
+
+        onDoubleClick(e) {
+            const pos = this.getMousePos(e);
+            const clickedComp = this.components.find(c => Math.abs(c.x - pos.x) < 20 && Math.abs(c.y - pos.y) < 20);
+            if (clickedComp) {
+                clickedComp.rotation = (clickedComp.rotation + 90) % 360;
+                this.draw();
+                Renderer.updateAll();
+            }
+        },
+
+        draw() {
+            if (!this.ctx) return;
+            this.ctx.clearRect(0, 0, this.width, this.height);
+
+            // Wires
+            this.ctx.beginPath();
+            this.ctx.strokeStyle = '#94a3b8';
+            this.ctx.lineWidth = 2;
+            this.wires.forEach(w => {
+                this.ctx.moveTo(w.x1, w.y1);
+                this.ctx.lineTo(w.x2, w.y2);
+            });
+            if (this.tempWire) {
+                this.ctx.moveTo(this.tempWire.x1, this.tempWire.y1);
+                this.ctx.lineTo(this.tempWire.x2, this.tempWire.y2);
+            }
+            this.ctx.stroke();
+
+            // Components
+            this.components.forEach(c => {
+                this.ctx.save();
+                this.ctx.translate(c.x, c.y);
+                this.ctx.rotate((c.rotation * Math.PI) / 180);
+
+                // Highlight if selected
+                if (c.id === this.selectedId) {
+                    this.ctx.shadowBlur = 10;
+                    this.ctx.shadowColor = '#38bdf8';
+                }
+
+                this.drawComponent(c.type, c);
+                this.ctx.restore();
+            });
+        },
+
+        drawComponent(type, c) {
+            this.ctx.strokeStyle = '#f8fafc';
+            this.ctx.lineWidth = 2;
+            this.ctx.fillStyle = '#f8fafc';
+            this.ctx.beginPath();
+
+            if (type === 'resistor') {
+                this.ctx.moveTo(-15, 0);
+                this.ctx.lineTo(-12, -5);
+                this.ctx.lineTo(-8, 5);
+                this.ctx.lineTo(-4, -5);
+                this.ctx.lineTo(0, 5);
+                this.ctx.lineTo(4, -5);
+                this.ctx.lineTo(8, 5);
+                this.ctx.lineTo(12, -5);
+                this.ctx.lineTo(15, 0);
+                this.ctx.stroke();
+            } else if (type === 'capacitor') {
+                this.ctx.moveTo(-4, -10); this.ctx.lineTo(-4, 10);
+                this.ctx.moveTo(4, -10); this.ctx.lineTo(4, 10);
+                this.ctx.moveTo(-15, 0); this.ctx.lineTo(-4, 0);
+                this.ctx.moveTo(4, 0); this.ctx.lineTo(15, 0);
+                this.ctx.stroke();
+            } else if (type === 'inductor') {
+                this.ctx.moveTo(-15, 0);
+                for (let i = 0; i < 3; i++) {
+                    this.ctx.arc(-10 + i * 8, 0, 4, Math.PI, 0, false);
+                }
+                this.ctx.stroke();
+            } else if (type === 'diode' || type === 'led' || type === 'diode-led' || type === 'diode-zener' || type === 'diode-schottky' || type === 'diode-photo' || type === 'diode-tvs' || type === 'varactor') {
+                this.ctx.moveTo(-10, -7); this.ctx.lineTo(-10, 7); this.ctx.lineTo(5, 0); this.ctx.closePath();
+                this.ctx.stroke();
+                this.ctx.beginPath();
+                this.ctx.moveTo(5, -7); this.ctx.lineTo(5, 7);
+                if (type === 'diode-zener' || type === 'diode-tvs') {
+                    this.ctx.lineTo(8, 7);
+                    this.ctx.moveTo(5, -7); this.ctx.lineTo(2, -7);
+                    if (type === 'diode-tvs') { // Double sided for TVS
+                        this.ctx.moveTo(-10, -7); this.ctx.lineTo(-13, -7);
+                        this.ctx.moveTo(-10, 7); this.ctx.lineTo(-7, 7);
+                    }
+                } else if (type === 'diode-schottky') {
+                    this.ctx.moveTo(2, -7); this.ctx.lineTo(5, -7); this.ctx.lineTo(5, 7); this.ctx.lineTo(8, 7);
+                } else if (type === 'varactor') {
+                    this.ctx.moveTo(8, -7); this.ctx.lineTo(8, 7);
+                }
+                this.ctx.stroke();
+                if (type === 'led' || type === 'diode-led') {
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(0, -8); this.ctx.lineTo(-5, -13);
+                    this.ctx.moveTo(5, -10); this.ctx.lineTo(0, -15);
+                    this.ctx.stroke();
+                } else if (type === 'diode-photo') {
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(-5, -13); this.ctx.lineTo(0, -8);
+                    this.ctx.moveTo(0, -15); this.ctx.lineTo(5, -10);
+                    this.ctx.stroke();
+                }
+            } else if (type === 'scr') {
+                this.ctx.moveTo(-10, -7); this.ctx.lineTo(-10, 7); this.ctx.lineTo(5, 0); this.ctx.closePath();
+                this.ctx.stroke();
+                this.ctx.moveTo(5, -7); this.ctx.lineTo(5, 7);
+                this.ctx.moveTo(-5, 5); this.ctx.lineTo(-10, 15); // Gate
+                this.ctx.stroke();
+            } else if (type === 'diac' || type === 'triac') {
+                // Double diode
+                this.ctx.moveTo(-5, 0); this.ctx.lineTo(5, -7); this.ctx.lineTo(5, 7); this.ctx.closePath();
+                this.ctx.moveTo(5, 0); this.ctx.lineTo(-5, -7); this.ctx.lineTo(-5, 7); this.ctx.closePath();
+                this.ctx.stroke();
+                if (type === 'triac') {
+                    this.ctx.moveTo(2, 5); this.ctx.lineTo(10, 15); // Gate
+                    this.ctx.stroke();
+                }
+            } else if (type === 'diode-bridge') {
+                this.ctx.rect(-15, -15, 30, 30);
+                this.ctx.moveTo(-15, 0); this.ctx.lineTo(15, 0);
+                this.ctx.moveTo(0, -15); this.ctx.lineTo(0, 15);
+                this.ctx.stroke();
+                this.ctx.font = '8px Arial';
+                this.ctx.fillText('~', -12, 12);
+                this.ctx.fillText('~', 8, -8);
+                this.ctx.fillText('+', 8, 12);
+                this.ctx.fillText('-', -12, -8);
+            } else if (type === 'transistor-npn' || type === 'transistor-pnp') {
+                this.ctx.moveTo(-5, -10); this.ctx.lineTo(-5, 10); // Base bar
+                this.ctx.moveTo(-15, 0); this.ctx.lineTo(-5, 0); // Base wire
+                this.ctx.moveTo(-5, -5); this.ctx.lineTo(10, -15); // Collector
+                this.ctx.moveTo(-5, 5); this.ctx.lineTo(10, 15); // Emitter
+                this.ctx.stroke();
+                this.ctx.beginPath();
+                if (type === 'transistor-npn') {
+                    this.ctx.moveTo(2, 11); this.ctx.lineTo(10, 15); this.ctx.lineTo(7, 8);
+                } else {
+                    this.ctx.moveTo(0, 3); this.ctx.lineTo(-5, 5); this.ctx.lineTo(-3, 8);
+                }
+                this.ctx.stroke();
+            } else if (type === 'mosfet-n' || type === 'mosfet-p') {
+                this.ctx.moveTo(-5, -10); this.ctx.lineTo(-5, 10); // Gate bar
+                this.ctx.moveTo(-15, 5); this.ctx.lineTo(-10, 5); // Gate wire (offset)
+                this.ctx.moveTo(-10, -10); this.ctx.lineTo(-10, 10); // Channel bar
+                this.ctx.moveTo(-10, -8); this.ctx.lineTo(10, -8); // Drain
+                this.ctx.moveTo(-10, 8); this.ctx.lineTo(10, 8); // Source
+                this.ctx.stroke();
+                this.ctx.beginPath();
+                if (type === 'mosfet-n') {
+                    this.ctx.moveTo(-2, 8); this.ctx.lineTo(-10, 8); this.ctx.lineTo(-2, 5);
+                } else {
+                    this.ctx.moveTo(-10, 8); this.ctx.lineTo(-2, 8); this.ctx.moveTo(-10, 8); this.ctx.lineTo(-2, 11);
+                }
+                this.ctx.stroke();
+            } else if (type === 'opamp') {
+                this.ctx.moveTo(-15, -15); this.ctx.lineTo(-15, 15); this.ctx.lineTo(15, 0); this.ctx.closePath();
+                this.ctx.stroke();
+                this.ctx.font = '10px Arial';
+                this.ctx.fillText('-', -12, -5);
+                this.ctx.fillText('+', -12, 10);
+            } else if (type === 'battery') {
+                this.ctx.moveTo(-3, -10); this.ctx.lineTo(-3, 10);
+                this.ctx.moveTo(3, -5); this.ctx.lineTo(3, 5);
+                this.ctx.stroke();
+                this.ctx.moveTo(-15, 0); this.ctx.lineTo(-3, 0);
+                this.ctx.moveTo(3, 0); this.ctx.lineTo(15, 0);
+                this.ctx.stroke();
+            } else if (type === 'acsource') {
+                this.ctx.arc(0, 0, 12, 0, Math.PI * 2);
+                this.ctx.stroke();
+                this.ctx.beginPath();
+                this.ctx.moveTo(-6, 0);
+                this.ctx.bezierCurveTo(-3, -8, 3, 8, 6, 0);
+                this.ctx.stroke();
+            } else if (type === 'voltmeter' || type === 'ammeter' || type === 'multimeter') {
+                this.ctx.arc(0, 0, 15, 0, Math.PI * 2);
+                this.ctx.stroke();
+                this.ctx.font = 'bold 12px Arial';
+                this.ctx.textAlign = 'center';
+                let label = 'V';
+                if (type === 'ammeter') label = 'A';
+                if (type === 'multimeter') label = 'M';
+                this.ctx.fillText(label, 0, 5);
+            } else if (type === 'oscilloscope') {
+                this.ctx.rect(-20, -15, 40, 30);
+                this.ctx.stroke();
+                // Grid/Screen
+                this.ctx.beginPath();
+                this.ctx.setLineDash([2, 2]);
+                this.ctx.moveTo(-15, 0); this.ctx.lineTo(15, 0);
+                this.ctx.moveTo(0, -10); this.ctx.lineTo(0, 10);
+                this.ctx.stroke();
+                this.ctx.setLineDash([]);
+                // Waveform
+                this.ctx.beginPath();
+                this.ctx.strokeStyle = '#22c55e'; // Green wave
+                this.ctx.moveTo(-15, 5);
+                this.ctx.bezierCurveTo(-7, -15, 7, 15, 15, -5);
+                this.ctx.stroke();
+                this.ctx.strokeStyle = '#f8fafc';
+            } else if (type === 'funcgen') {
+                this.ctx.rect(-20, -15, 40, 30);
+                this.ctx.stroke();
+                this.ctx.font = '8px Arial';
+                this.ctx.fillText('FUNC', 0, -5);
+                // Icons
+                this.ctx.beginPath();
+                this.ctx.moveTo(-12, 5); this.ctx.lineTo(-8, 5); this.ctx.lineTo(-8, 10); this.ctx.lineTo(-4, 10); // Square
+                this.ctx.moveTo(4, 8); this.ctx.bezierCurveTo(7, 2, 11, 14, 14, 8); // Sine
+                this.ctx.stroke();
+            } else if (type === 'powersupply') {
+                this.ctx.rect(-20, -15, 40, 30);
+                this.ctx.stroke();
+                this.ctx.font = 'bold 10px Arial';
+                this.ctx.fillText('DC PS', 0, -2);
+                this.ctx.font = '8px Arial';
+                this.ctx.fillText('0-30V', 0, 8);
+                // Terminals
+                this.ctx.beginPath();
+                this.ctx.arc(-10, 10, 2, 0, 2 * Math.PI);
+                this.ctx.arc(10, 10, 2, 0, 2 * Math.PI);
+                this.ctx.fill();
+            } else if (type === 'bulb') {
+                this.ctx.arc(0, 0, 10, 0, Math.PI * 2);
+                this.ctx.stroke();
+                this.ctx.moveTo(-7, -7); this.ctx.lineTo(7, 7);
+                this.ctx.moveTo(7, -7); this.ctx.lineTo(-7, 7);
+                this.ctx.stroke();
+            } else if (type === 'switch') {
+                this.ctx.moveTo(-15, 0); this.ctx.lineTo(-5, 0);
+                this.ctx.lineTo(10, -10);
+                this.ctx.moveTo(10, 0); this.ctx.lineTo(15, 0);
+                this.ctx.stroke();
+                this.ctx.beginPath();
+                this.ctx.arc(-5, 0, 2, 0, 2 * Math.PI);
+                this.ctx.arc(10, 0, 2, 0, 2 * Math.PI);
+                this.ctx.fill();
+            } else if (type === 'ground') {
+                this.ctx.moveTo(0, -10); this.ctx.lineTo(0, 0);
+                this.ctx.moveTo(-10, 0); this.ctx.lineTo(10, 0);
+                this.ctx.moveTo(-6, 4); this.ctx.lineTo(6, 4);
+                this.ctx.moveTo(-2, 8); this.ctx.lineTo(2, 8);
+                this.ctx.stroke();
+            } else if (type === 'text') {
+                this.ctx.font = '14px Arial';
+                this.ctx.fillStyle = '#cbd5e1';
+                this.ctx.textAlign = 'center';
+                this.ctx.fillText(c.text || 'Txt', 0, 5);
+            }
+        },
+
+        getImage() {
+            if (!this.components.length && !this.wires.length) return null;
+            return this.canvas.toDataURL('image/png');
+        }
+    };
+
+    // ==========================================
     // 7. GESTORE EVENTI (Listeners)
+
     // ==========================================
     const Events = {
         init() {
             // Expose Renderer globally to fix potential external calls
             window.Render = Renderer;
+            window.CircuitEditor = CircuitEditor;
+            CircuitEditor.init();
 
             // Mermaid initial config removed (handled by flowchart.js or not needed)
 

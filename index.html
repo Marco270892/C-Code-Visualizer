@@ -190,20 +190,24 @@
                     </div>
                     <div class="input-group">
                         <label for="lab-materials">Materiali</label>
-                        <textarea id="lab-materials" placeholder="Es: Componenti elettronici, reagenti..."
-                            rows="2"></textarea>
+                        <textarea id="lab-materials" placeholder="Es:
+— Componente 1
+— Componente 2..." rows="4"></textarea>
                     </div>
                 </div>
                 <div class="customization-grid lab-grid"
                     style="grid-template-columns: repeat(2, 1fr); margin-top: 10px;">
                     <div class="input-group">
                         <label for="lab-tools">Strumenti / Hardware</label>
-                        <textarea id="lab-tools" placeholder="Es: Oscilloscopio, Multimetro, Arduino..."
-                            rows="2"></textarea>
+                        <textarea id="lab-tools" placeholder="Es:
+— Strumento 1
+— Strumento 2..." rows="4"></textarea>
                     </div>
                     <div class="input-group">
                         <label for="lab-software">Software / App</label>
-                        <textarea id="lab-software" placeholder="Es: VS Code, MATLAB, Tinkercad..." rows="2"></textarea>
+                        <textarea id="lab-software" placeholder="Es:
+— Software 1
+— App 2..." rows="4"></textarea>
                     </div>
                 </div>
                 <div class="input-group exercise-group">
@@ -239,6 +243,183 @@
                         </svg>
                         Aggiungi Nuova Tabella/Grafico
                     </button>
+                </div>
+
+                <!-- CIRCUIT EDITOR SECTION -->
+                <div class="circuit-section"
+                    style="margin-top: 10px; border-top: 1px dashed rgba(255,255,255,0.1); padding-top: 20px;">
+                    <span class="section-title-small">Schemi Elettrici (Beta)</span>
+
+                    <div class="circuit-editor-container"
+                        style="background: rgba(15, 23, 42, 0.5); padding: 15px; border-radius: 8px; border: 1px solid var(--border-color); margin-top: 10px;">
+
+                        <!-- Toolbar -->
+                        <div class="circuit-toolbar"
+                            style="display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap;">
+                            <button type="button" class="btn btn-secondary btn-sm circuit-tool active"
+                                data-tool="select" title="Seleziona/Sposta">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+                                    fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z" />
+                                    <path d="M13 13l6 6" />
+                                </svg>
+                            </button>
+                            <button type="button" class="btn btn-secondary btn-sm circuit-tool" data-tool="wire"
+                                title="Filo">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+                                    fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M5 12h14" />
+                                </svg>
+                            </button>
+                            <div style="width: 1px; background: var(--border-color); margin: 0 5px;"></div>
+                            <button type="button" class="btn btn-secondary btn-sm circuit-tool" data-tool="resistor"
+                                title="Resistore">
+                                <strong>R</strong>
+                            </button>
+                            <button type="button" class="btn btn-secondary btn-sm circuit-tool" data-tool="capacitor"
+                                title="Condensatore">
+                                <strong>C</strong>
+                            </button>
+                            <button type="button" class="btn btn-secondary btn-sm circuit-tool" data-tool="inductor"
+                                title="Induttore">
+                                <strong>L</strong>
+                            </button>
+                            <div class="circuit-dropdown-container">
+                                <button type="button" class="btn btn-secondary btn-sm circuit-tool dropdown-trigger"
+                                    data-tool="diode" title="Diodi (Clicca per varianti)">
+                                    <strong>D ▾</strong>
+                                </button>
+                                <div class="circuit-submenu">
+                                    <button type="button" class="submenu-item" data-tool="diode">Standard</button>
+                                    <button type="button" class="submenu-item" data-tool="diode-zener">Zener</button>
+                                    <button type="button" class="submenu-item"
+                                        data-tool="diode-schottky">Schottky</button>
+                                    <button type="button" class="submenu-item" data-tool="diode-led">LED</button>
+                                    <button type="button" class="submenu-item"
+                                        data-tool="diode-photo">Fotodiodo</button>
+                                    <button type="button" class="submenu-item" data-tool="diode-tvs">Protezione
+                                        (TVS)</button>
+                                    <button type="button" class="submenu-item" data-tool="diode-bridge">Ponte
+                                        (FWB)</button>
+                                    <button type="button" class="submenu-item" data-tool="scr">SCR (Tiristore)</button>
+                                    <button type="button" class="submenu-item" data-tool="diac">DIAC</button>
+                                    <button type="button" class="submenu-item" data-tool="triac">TRIAC</button>
+                                    <button type="button" class="submenu-item" data-tool="varactor">Varactor</button>
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-secondary btn-sm circuit-tool" data-tool="led"
+                                title="LED">
+                                <strong>LED</strong>
+                            </button>
+                            <div class="circuit-dropdown-container">
+                                <button type="button" class="btn btn-secondary btn-sm circuit-tool dropdown-trigger"
+                                    data-tool="transistor-npn" title="Transistor (Clicca per varianti)">
+                                    <strong>Q ▾</strong>
+                                </button>
+                                <div class="circuit-submenu">
+                                    <button type="button" class="submenu-item" data-tool="transistor-npn">NPN</button>
+                                    <button type="button" class="submenu-item" data-tool="transistor-pnp">PNP</button>
+                                    <button type="button" class="submenu-item" data-tool="mosfet-n">N-MOSFET</button>
+                                    <button type="button" class="submenu-item" data-tool="mosfet-p">P-MOSFET</button>
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-secondary btn-sm circuit-tool" data-tool="opamp"
+                                title="Op-Amp">
+                                <strong>Op</strong>
+                            </button>
+                            <button type="button" class="btn btn-secondary btn-sm circuit-tool" data-tool="battery"
+                                title="Batteria DC">
+                                <strong>V</strong>
+                            </button>
+                            <div class="circuit-dropdown-container">
+                                <button type="button" class="btn btn-secondary btn-sm circuit-tool dropdown-trigger"
+                                    data-tool="voltmeter" title="Strumenti (Clicca per varianti)">
+                                    <strong>Inst ▾</strong>
+                                </button>
+                                <div class="circuit-submenu">
+                                    <button type="button" class="submenu-item" data-tool="voltmeter">Voltmetro</button>
+                                    <button type="button" class="submenu-item" data-tool="ammeter">Amperometro</button>
+                                    <button type="button" class="submenu-item"
+                                        data-tool="multimeter">Multimetro</button>
+                                    <button type="button" class="submenu-item"
+                                        data-tool="oscilloscope">Oscilloscopio</button>
+                                    <button type="button" class="submenu-item" data-tool="funcgen">Gen.
+                                        Funzioni</button>
+                                    <button type="button" class="submenu-item" data-tool="powersupply">Alimentatore
+                                        DC</button>
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-secondary btn-sm circuit-tool" data-tool="bulb"
+                                title="Lampadina">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+                                    fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M9 18h6" />
+                                    <path d="M10 22h4" />
+                                    <path d="M12 2v4" />
+                                    <path d="M12 18v-4" />
+                                    <path d="M12 14v-2" />
+                                    <circle cx="12" cy="11" r="5" />
+                                    <path d="M8 11l-3 3" />
+                                    <path d="M16 11l3 3" />
+                                </svg>
+                            </button>
+                            <button type="button" class="btn btn-secondary btn-sm circuit-tool" data-tool="switch"
+                                title="Interruttore">
+                                <strong>S</strong>
+                            </button>
+                            <button type="button" class="btn btn-secondary btn-sm circuit-tool" data-tool="ground"
+                                title="GND">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+                                    fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M12 5v8" />
+                                    <path d="M4 13h16" />
+                                    <path d="M7 16h10" />
+                                    <path d="M10 19h4" />
+                                </svg>
+                            </button>
+                            <button type="button" class="btn btn-secondary btn-sm circuit-tool" data-tool="text"
+                                title="Testo">
+                                <strong>T</strong>
+                            </button>
+
+                            <div style="flex:1"></div>
+
+                            <button type="button" class="btn btn-secondary btn-sm" id="circuit-rotate"
+                                title="Ruota Selezione">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+                                    fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                                    <path d="M3 3v5h5" />
+                                </svg>
+                            </button>
+                            <button type="button" class="btn btn-secondary btn-sm" id="circuit-delete"
+                                style="color: #ef4444;" title="Elimina Selezione">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+                                    fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="3 6 5 6 21 6"></polyline>
+                                    <path
+                                        d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2">
+                                    </path>
+                                </svg>
+                            </button>
+                            <button type="button" class="btn btn-secondary btn-sm" id="circuit-clear"
+                                title="Pulisci Tutto">
+                                ALL
+                            </button>
+                        </div>
+
+                        <!-- Canvas Area -->
+                        <div class="canvas-wrapper"
+                            style="position: relative; overflow: hidden; background: #1e293b; border-radius: 4px; border: 1px solid #334155; height: 400px; display: flex; justify-content: center; align-items: center;">
+                            <canvas id="circuit-canvas" width="800" height="400"
+                                style="background-image: radial-gradient(#334155 1px, transparent 1px); background-size: 20px 20px; cursor: crosshair;"></canvas>
+                        </div>
+                        <div
+                            style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 8px; display: flex; justify-content: space-between;">
+                            <span>Si consiglia di usare il mouse. Doppio click per ruotare.</span>
+                            <span id="circuit-status">Pronto</span>
+                        </div>
+                    </div>
                 </div>
             </div>
 
