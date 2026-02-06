@@ -24,17 +24,21 @@
                 displayMath: [['$$', '$$'], ['\\[', '\\]']],
                 processEscapes: true
             },
-            svg: {
-                fontCache: 'global'
-            },
             options: {
+                enableAssistiveMml: false, // FIX: Evita il testo sdoppiato nei PDF
                 ignoreHtmlClass: 'tex2jax_ignore',
                 processHtmlClass: 'tex2jax_process'
             }
         };
     </script>
+    <style>
+        /* Nasconde i layer invisibili di MathJax che creano l'effetto sdoppiato nei PDF */
+        mjx-assistive-mml {
+            display: none !important;
+        }
+    </style>
     <!-- MathJax for LaTeX support (Online CDN) -->
-    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <!-- Flowchart.js for Flowcharts -->
     <!-- (Mermaid removed to avoid conflicts) -->
     <!-- Chart.js for graphs (Online CDN) -->
