@@ -455,7 +455,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // 5. PROJECT MANAGER (Export/Import)
     // ==========================================
     const ProjectManager = {
-        export() {
+        async export() {
             const data = {
                 version: "2.5",
                 timestamp: Date.now(),
@@ -490,11 +490,36 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             };
 
-            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const fileName = `${UI.inputs.title.value.replace(/ /g, '_')}_progetto.lab`;
+            const jsonText = JSON.stringify(data, null, 2);
+
+            // Attempt to use the modern File System Access API (Save As dialog)
+            if ('showSaveFilePicker' in window) {
+                try {
+                    const handle = await window.showSaveFilePicker({
+                        suggestedName: fileName,
+                        types: [{
+                            description: 'File Progetto Laboratorio',
+                            accept: { 'application/json': ['.lab', '.json'] },
+                        }],
+                    });
+                    const writable = await handle.createWritable();
+                    await writable.write(jsonText);
+                    await writable.close();
+                    return; // Success
+                } catch (err) {
+                    // AbortError means user cancelled, so we just stop.
+                    if (err.name === 'AbortError') return;
+                    console.warn("showSaveFilePicker failed, falling back to download link.", err);
+                }
+            }
+
+            // Fallback for older browsers or non-HTTPS contexts
+            const blob = new Blob([jsonText], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `${UI.inputs.title.value.replace(/ /g, '_')}_progetto.lab`;
+            a.download = fileName;
             a.click();
             URL.revokeObjectURL(url);
         },
