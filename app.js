@@ -2308,7 +2308,33 @@ document.addEventListener('DOMContentLoaded', () => {
                 const pdf = new jsPDF({ unit: 'pt', format: [pdfWidth, pdfHeight] });
 
                 pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-                pdf.save(`${title.toLowerCase().replace(/ /g, '_')}.pdf`);
+                const fileName = `${title.toLowerCase().replace(/ /g, '_')}.pdf`;
+
+                // Attempt to use the modern File System Access API (Save As dialog)
+                if ('showSaveFilePicker' in window) {
+                    try {
+                        const handle = await window.showSaveFilePicker({
+                            suggestedName: fileName,
+                            types: [{
+                                description: 'Documento PDF',
+                                accept: { 'application/pdf': ['.pdf'] },
+                            }],
+                        });
+                        const writable = await handle.createWritable();
+                        // Get PDF as blob to save it via the picker
+                        const pdfBlob = pdf.output('blob');
+                        await writable.write(pdfBlob);
+                        await writable.close();
+                        return; // Success
+                    } catch (err) {
+                        // AbortError means user cancelled
+                        if (err.name === 'AbortError') return;
+                        console.warn("showSaveFilePicker failed, falling back to simple save.", err);
+                    }
+                }
+
+                // Fallback: Automatic download in 'Downloads' folder
+                pdf.save(fileName);
             } catch (e) {
                 console.error("PDF Error:", e);
                 alert("Ops! Errore generazione PDF. Dettagli: " + e.message);
