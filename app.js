@@ -365,8 +365,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     localStorage.setItem(prefix + 'calculations', UI.labInputs.calculations.value);
                     localStorage.setItem(prefix + 'conclusions', UI.labInputs.conclusions.value);
                     localStorage.setItem(prefix + 'charts-json', JSON.stringify(State.charts));
+
+                    // SAVE CIRCUIT:
+                    if (window.CircuitEditor) {
+                        localStorage.setItem(prefix + 'circuit-components', JSON.stringify(CircuitEditor.components));
+                        localStorage.setItem(prefix + 'circuit-wires', JSON.stringify(CircuitEditor.wires));
+                    }
                 }
-            } catch (e) { console.warn("Errore Storage (Quoto Exceeded?)", e); }
+            } catch (e) { console.warn("Errore Storage (Quota Exceeded?)", e); }
         },
 
         load(mode) {
@@ -451,6 +457,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 try {
                     State.charts = JSON.parse(localStorage.getItem(prefix + 'charts-json')) || [];
                 } catch { State.charts = []; }
+
+                // LOAD CIRCUIT:
+                try {
+                    if (window.CircuitEditor) {
+                        CircuitEditor.components = JSON.parse(localStorage.getItem(prefix + 'circuit-components')) || [];
+                        CircuitEditor.wires = JSON.parse(localStorage.getItem(prefix + 'circuit-wires')) || [];
+                        CircuitEditor.draw();
+                    }
+                } catch (e) { console.warn("Errore caricamento circuito", e); }
             } else {
                 State.charts = [];
             }
@@ -989,14 +1004,19 @@ document.addEventListener('DOMContentLoaded', () => {
             const pos = this.getMousePos(e);
 
             if (this.tool === 'select') {
-                // Check collision - Increased radius from 20 to 30 for easier selection
+                // 1. Check components (priority)
                 const clickedComp = this.components.find(c => Math.abs(c.x - pos.x) < 30 && Math.abs(c.y - pos.y) < 30);
                 if (clickedComp) {
                     this.selectedId = clickedComp.id;
                     this.isDragging = true;
                     this.dragStart = { x: pos.x - clickedComp.x, y: pos.y - clickedComp.y };
                 } else {
-                    this.selectedId = null;
+                    // 2. Check wires
+                    const clickedWire = this.wires.find(w => {
+                        const dist = this.distToSegment(pos, { x: w.x1, y: w.y1 }, { x: w.x2, y: w.y2 });
+                        return dist < 10;
+                    });
+                    this.selectedId = clickedWire ? clickedWire.id : null;
                 }
                 this.draw();
             } else if (this.tool === 'wire') {
@@ -1031,7 +1051,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const pos = this.getMousePos(e);
 
             // Hover detection
-            const hovered = this.components.find(c => Math.abs(c.x - pos.x) < 30 && Math.abs(c.y - pos.y) < 30);
+            const hoveredComp = this.components.find(c => Math.abs(c.x - pos.x) < 30 && Math.abs(c.y - pos.y) < 30);
+            const hoveredWire = hoveredComp ? null : this.wires.find(w => {
+                const dist = this.distToSegment(pos, { x: w.x1, y: w.y1 }, { x: w.x2, y: w.y2 });
+                return dist < 10;
+            });
+
+            const hovered = hoveredComp || hoveredWire;
             const newHoverId = hovered ? hovered.id : null;
 
             if (this.hoverId !== newHoverId) {
@@ -1087,18 +1113,28 @@ document.addEventListener('DOMContentLoaded', () => {
             this.ctx.clearRect(0, 0, this.width, this.height);
 
             // Wires
-            this.ctx.beginPath();
-            this.ctx.strokeStyle = '#94a3b8';
-            this.ctx.lineWidth = 2;
             this.wires.forEach(w => {
+                this.ctx.beginPath();
+                this.ctx.strokeStyle = (w.id === this.selectedId) ? '#38bdf8' : (w.id === this.hoverId ? '#f8fafc' : '#94a3b8');
+                this.ctx.lineWidth = (w.id === this.selectedId || w.id === this.hoverId) ? 3 : 2;
                 this.ctx.moveTo(w.x1, w.y1);
                 this.ctx.lineTo(w.x2, w.y2);
+                this.ctx.stroke();
+
+                // Draw dots at wire ends if they connect to other things (junctions)
+                this.drawJunction(w.x1, w.y1);
+                this.drawJunction(w.x2, w.y2);
             });
+
             if (this.tempWire) {
+                this.ctx.beginPath();
+                this.ctx.strokeStyle = '#38bdf8';
+                this.ctx.setLineDash([5, 5]);
                 this.ctx.moveTo(this.tempWire.x1, this.tempWire.y1);
                 this.ctx.lineTo(this.tempWire.x2, this.tempWire.y2);
+                this.ctx.stroke();
+                this.ctx.setLineDash([]);
             }
-            this.ctx.stroke();
 
             // Components
             this.components.forEach(c => {
@@ -1353,6 +1389,34 @@ document.addEventListener('DOMContentLoaded', () => {
         getImage() {
             if (!this.components.length && !this.wires.length) return null;
             return this.canvas.toDataURL('image/png');
+        },
+
+        // Helper calculations
+        distToSegment(p, v, w) {
+            const l2 = Math.pow(v.x - w.x, 2) + Math.pow(v.y - w.y, 2);
+            if (l2 === 0) return Math.sqrt(Math.pow(p.x - v.x, 2) + Math.pow(p.y - v.y, 2));
+            let t = ((p.x - v.x) * (w.x - v.x) + (p.y - v.y) * (w.y - v.y)) / l2;
+            t = Math.max(0, Math.min(1, t));
+            return Math.sqrt(Math.pow(p.x - (v.x + t * (w.x - v.x)), 2) + Math.pow(p.y - (v.y + t * (w.y - v.y)), 2));
+        },
+
+        drawJunction(x, y) {
+            // Check if multiple wires or components meet here
+            let count = 0;
+            this.wires.forEach(w => {
+                if ((w.x1 === x && w.y1 === y) || (w.x2 === x && w.y2 === y)) count++;
+            });
+            this.components.forEach(c => {
+                // Simplified terminal check (standard width is 40, terminals at +/- 20)
+                if (Math.abs(c.y - y) < 5 && (Math.abs(c.x + 20 - x) < 5 || Math.abs(c.x - 20 - x) < 5)) count++;
+            });
+
+            if (count > 2) {
+                this.ctx.beginPath();
+                this.ctx.fillStyle = '#94a3b8';
+                this.ctx.arc(x, y, 4, 0, Math.PI * 2);
+                this.ctx.fill();
+            }
         }
     };
 
