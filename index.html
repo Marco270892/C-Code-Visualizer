@@ -16,29 +16,20 @@
     <link rel="stylesheet" href="style.css">
     <!-- Prism.js Tomorrow Night Theme (Online CDN) -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
-    <!-- MathJax for LaTeX support -->
-    <script>
-        window.MathJax = {
-            tex: {
-                inlineMath: [['$', '$'], ['\\(', '\\)']],
-                displayMath: [['$$', '$$'], ['\\[', '\\]']],
+    <!-- MathJax for LaTeX support (Version 2.7 is more stable for PDF exports) -->
+    <script type="text/x-mathjax-config">
+        MathJax.Hub.Config({
+            tex2jax: {
+                inlineMath: [['$','$'], ['\\(','\\)']],
                 processEscapes: true
             },
-            options: {
-                enableAssistiveMml: false, // FIX: Evita il testo sdoppiato nei PDF
-                ignoreHtmlClass: 'tex2jax_ignore',
-                processHtmlClass: 'tex2jax_process'
-            }
-        };
+            CommonHTML: { linebreaks: { automatic: true } },
+            "HTML-CSS": { linebreaks: { automatic: true }, mht: "None" },
+            SVG: { linebreaks: { automatic: true } },
+            messageStyle: "none"
+        });
     </script>
-    <style>
-        /* Nasconde i layer invisibili di MathJax che creano l'effetto sdoppiato nei PDF */
-        mjx-assistive-mml {
-            display: none !important;
-        }
-    </style>
-    <!-- MathJax for LaTeX support (Online CDN) -->
-    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.9/MathJax.js?config=TeX-AMS_CHTML"></script>
     <!-- Flowchart.js for Flowcharts -->
     <!-- (Mermaid removed to avoid conflicts) -->
     <!-- Chart.js for graphs (Online CDN) -->

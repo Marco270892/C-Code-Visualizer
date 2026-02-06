@@ -634,9 +634,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 sectionDiv.appendChild(contentDiv);
                 container.appendChild(sectionDiv);
 
-                // Trigger MathJax for conclusions
-                if (window.MathJax) {
-                    window.MathJax.typesetPromise([container]);
+                // Trigger MathJax for conclusions (v2 style)
+                if (window.MathJax && window.MathJax.Hub) {
+                    window.MathJax.Hub.Queue(["Typeset", window.MathJax.Hub, container]);
                 }
             }
         },
@@ -736,9 +736,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
 
-            // Trigger MathJax if needed
-            if (window.MathJax) {
-                window.MathJax.typesetPromise([container]);
+            // Trigger MathJax if needed (v2 style)
+            if (window.MathJax && window.MathJax.Hub) {
+                window.MathJax.Hub.Queue(["Typeset", window.MathJax.Hub, container]);
             }
         },
 
@@ -2021,13 +2021,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 const title = prompt("Titolo file PDF:", UI.inputs.title.value) || "Documento";
                 const element = document.querySelector('.pdf-page-mock');
 
-                // Forza MathJax a finire qualsiasi rendering in corso e attendi un attimo
-                if (window.MathJax && window.MathJax.typesetPromise) {
-                    await window.MathJax.typesetPromise();
+                // Forza MathJax v2 a finire il rendering
+                if (window.MathJax && window.MathJax.Hub) {
+                    await new Promise(resolve => {
+                        window.MathJax.Hub.Queue(["Typeset", window.MathJax.Hub, element], resolve);
+                    });
                 }
 
-                // Piccolo trucco: aspettiamo che i font siano stabili
-                await new Promise(r => setTimeout(r, 800));
+                // Attendi un attimo extra per la stabilità grafica
+                await new Promise(r => setTimeout(r, 1000));
 
                 window.scrollTo(0, 0);
 
