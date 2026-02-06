@@ -22,6 +22,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // NEW: Media
         screenshots: [],       // Array of { src: base64, caption: string }
+        screenshotLayout: '2', // '1', '2', '3' colonne
         flowchartCode: '',     // Testo codice Mermaid
     };
 
@@ -75,6 +76,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // New Extras
             flowchart: document.getElementById('flowchart-main-input'),
             screenshotUpload: document.getElementById('screenshot-upload'),
+            screenshotLayout: document.getElementById('screenshot-layout-select'),
             screenshotList: document.getElementById('screenshots-list')
         },
         // Campi Laboratorio
@@ -350,9 +352,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         renderList() {
             UI.inputs.screenshotList.innerHTML = '';
-            State.screenshots.forEach(item => {
+            State.screenshots.forEach((item, index) => {
                 const div = document.createElement('div');
                 div.className = 'screenshot-preview-item';
+                div.draggable = true;
+                div.title = "Trascina per riordinare";
 
                 const img = document.createElement('img');
                 img.src = item.src;
@@ -360,12 +364,38 @@ document.addEventListener('DOMContentLoaded', () => {
                 const removeBtn = document.createElement('button');
                 removeBtn.className = 'remove-screenshot';
                 removeBtn.innerHTML = '&times;';
-                removeBtn.onclick = () => this.remove(item.id);
+                removeBtn.onclick = (e) => { e.stopPropagation(); this.remove(item.id); };
 
                 div.appendChild(img);
                 div.appendChild(removeBtn);
+
+                // Drag and Drop reordering
+                div.ondragstart = (e) => {
+                    this.draggedId = item.id;
+                    div.classList.add('dragging');
+                };
+                div.ondragend = () => div.classList.remove('dragging');
+                div.ondragover = (e) => e.preventDefault();
+                div.ondrop = (e) => {
+                    e.preventDefault();
+                    if (this.draggedId && this.draggedId !== item.id) {
+                        this.reorder(this.draggedId, item.id);
+                    }
+                };
+
                 UI.inputs.screenshotList.appendChild(div);
             });
+        },
+
+        reorder(draggedId, targetId) {
+            const fromIdx = State.screenshots.findIndex(s => s.id === draggedId);
+            const toIdx = State.screenshots.findIndex(s => s.id === targetId);
+            if (fromIdx !== -1 && toIdx !== -1) {
+                const [moved] = State.screenshots.splice(fromIdx, 1);
+                State.screenshots.splice(toIdx, 0, moved);
+                this.renderList();
+                Renderer.updateAll();
+            }
         }
     };
 
@@ -419,6 +449,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         localStorage.setItem(prefix + 'circuit-wires', JSON.stringify(CircuitEditor.wires));
                     }
                 }
+
+                // Screenshot Layout (persisted per project)
+                localStorage.setItem(prefix + 'screenshot-layout', State.screenshotLayout);
+
             } catch (e) { console.warn("Errore Storage (Quota Exceeded?)", e); }
         },
 
@@ -513,6 +547,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         CircuitEditor.draw();
                     }
                 } catch (e) { console.warn("Errore caricamento circuito", e); }
+
+                // Load Layout
+                State.screenshotLayout = localStorage.getItem(prefix + 'screenshot-layout') || '2';
+                if (UI.inputs.screenshotLayout) UI.inputs.screenshotLayout.value = State.screenshotLayout;
+
             } else {
                 State.charts = [];
             }
@@ -828,6 +867,11 @@ document.addEventListener('DOMContentLoaded', () => {
             if (State.screenshots.length > 0) {
                 UI.preview.screenshotsContainer.classList.remove('hidden');
                 UI.preview.screenshotsGrid.innerHTML = '';
+
+                // Applica il layout scelto (1, 2 o 3 colonne)
+                UI.preview.screenshotsGrid.style.display = 'grid';
+                UI.preview.screenshotsGrid.style.gridTemplateColumns = `repeat(${State.screenshotLayout}, 1fr)`;
+                UI.preview.screenshotsGrid.style.gap = '15px';
 
                 State.screenshots.forEach(img => {
                     const card = document.createElement('div');
@@ -1804,6 +1848,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
             UI.inputs.addFileBtn.onclick = () => FileManager.addFile();
             UI.inputs.screenshotUpload.onchange = (e) => ScreenshotManager.add(e.target.files);
+            UI.inputs.screenshotLayout.onchange = (e) => {
+                State.screenshotLayout = e.target.value;
+                Renderer.updateAll();
+            };
 
             // PLC Import Handlers
             if (UI.inputs.importPlcBtn) {
