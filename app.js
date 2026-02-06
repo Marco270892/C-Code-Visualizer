@@ -934,11 +934,14 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!this.canvas) return;
             this.ctx = this.canvas.getContext('2d');
 
-            // Mouse Events
-            this.canvas.addEventListener('mousedown', (e) => this.onMouseDown(e));
-            window.addEventListener('mousemove', (e) => this.onMouseMove(e));
-            window.addEventListener('mouseup', (e) => this.onMouseUp(e));
+            // Pointer Events (Support touch & mouse)
+            this.canvas.addEventListener('pointerdown', (e) => this.onMouseDown(e));
+            window.addEventListener('pointermove', (e) => this.onMouseMove(e));
+            window.addEventListener('pointerup', (e) => this.onMouseUp(e));
             this.canvas.addEventListener('dblclick', (e) => this.onDoubleClick(e));
+
+            // Fix for touch scrolling while drawing
+            this.canvas.style.touchAction = 'none';
 
             // Keyboard Events (Delete/Canc key)
             window.addEventListener('keydown', (e) => {
@@ -1110,11 +1113,12 @@ document.addEventListener('DOMContentLoaded', () => {
                         const segments = this.getWireSegments(selWire);
                         for (let i = 0; i < segments.length; i++) {
                             const p = segments[i];
-                            if (Math.abs(p.x - pos.x) < 10 && Math.abs(p.y - pos.y) < 10) {
+                            // Area di click aumentata a 15px per facilitare il touch
+                            if (Math.abs(p.x - pos.x) < 15 && Math.abs(p.y - pos.y) < 15) {
                                 this.isDragging = true;
                                 this.dragType = 'wire-handle';
                                 this.dragHandleIdx = i;
-                                this.draw(); // Redraw to show active handle
+                                this.draw();
                                 return;
                             }
                         }
