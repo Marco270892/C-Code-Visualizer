@@ -366,23 +366,41 @@ textarea#code-input {
 
 .screenshots-preview-list {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-    gap: 10px;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 12px;
     margin-top: 15px;
 }
 
 .screenshot-preview-item {
     position: relative;
     border: 1px solid var(--border-color);
-    border-radius: 6px;
+    border-radius: 8px;
     overflow: hidden;
-    aspect-ratio: 16/9;
+    background: rgba(0, 0, 0, 0.2);
+    display: flex;
+    flex-direction: column;
 }
 
 .screenshot-preview-item img {
     width: 100%;
-    height: 100%;
+    height: 80px;
     object-fit: cover;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.screenshot-caption-input {
+    width: 100%;
+    border: none;
+    background: transparent;
+    color: white;
+    font-size: 0.75rem;
+    padding: 6px 8px;
+    outline: none;
+    font-family: inherit;
+}
+
+.screenshot-caption-input:focus {
+    background: rgba(56, 189, 248, 0.1);
 }
 
 .remove-screenshot {

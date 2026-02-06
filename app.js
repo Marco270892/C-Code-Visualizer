@@ -418,11 +418,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 removeBtn.innerHTML = '&times;';
                 removeBtn.onclick = (e) => { e.stopPropagation(); this.remove(item.id); };
 
+                const captionInput = document.createElement('input');
+                captionInput.type = 'text';
+                captionInput.className = 'screenshot-caption-input';
+                captionInput.value = item.caption || '';
+                captionInput.placeholder = 'Didascalia...';
+                captionInput.oninput = (e) => this.updateCaption(item.id, e.target.value);
+
                 div.appendChild(img);
                 div.appendChild(removeBtn);
+                div.appendChild(captionInput);
 
                 // Drag and Drop reordering
                 div.ondragstart = (e) => {
+                    if (e.target.tagName === 'INPUT') return; // Don't drag if clicking input
                     this.draggedId = item.id;
                     div.classList.add('dragging');
                 };
