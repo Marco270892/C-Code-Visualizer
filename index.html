@@ -24,6 +24,9 @@
                 displayMath: [['$$', '$$'], ['\\[', '\\]']],
                 processEscapes: true
             },
+            svg: {
+                fontCache: 'global'
+            },
             options: {
                 ignoreHtmlClass: 'tex2jax_ignore',
                 processHtmlClass: 'tex2jax_process'
@@ -31,7 +34,7 @@
         };
     </script>
     <!-- MathJax for LaTeX support (Online CDN) -->
-    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
     <!-- Flowchart.js for Flowcharts -->
     <!-- (Mermaid removed to avoid conflicts) -->
     <!-- Chart.js for graphs (Online CDN) -->

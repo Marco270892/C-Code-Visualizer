@@ -2021,6 +2021,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 const title = prompt("Titolo file PDF:", UI.inputs.title.value) || "Documento";
                 const element = document.querySelector('.pdf-page-mock');
 
+                // Forza MathJax a finire qualsiasi rendering in corso e attendi un attimo
+                if (window.MathJax && window.MathJax.typesetPromise) {
+                    await window.MathJax.typesetPromise();
+                }
+
+                // Piccolo trucco: aspettiamo che i font siano stabili
+                await new Promise(r => setTimeout(r, 800));
+
                 window.scrollTo(0, 0);
 
                 const canvas = await html2canvas(element, {
@@ -2053,27 +2061,36 @@ document.addEventListener('DOMContentLoaded', () => {
     const HelpContent = {
         code: `
             <div class="help-section">
-                <h4>💻 Informazioni Generali</h4>
-                <p>Compila i dati dell'intestazione.</p>
+                <h4>💻 Software Developer Mode</h4>
+                <p>Questa modalità è ottimizzata per presentare il tuo codice sorgente in modo ordinato e colorato.</p>
                 <ul class="help-list">
-                    <li><strong>File Multipli:</strong> Usa "+ Nuovo File" per aggiungere tab.</li>
-                    <li><strong>Flowchart:</strong> Usa la sintassi flowchart.js nel campo Extra.</li>
+                    <li><strong>📁 File Multipli:</strong> Clicca "+ Nuovo File" per aggiungere linguette. Puoi trascinarle per ordinarle!</li>
+                    <li><strong>🖍️ Colori:</strong> Il codice viene colorato automaticamente usando lo standard C.</li>
+                    <li><strong>🔍 Flowchart:</strong> Se scrivi nel campo "Flowchart", il programma disegnerà lo schema logico sotto al codice.</li>
                 </ul>
+                <p><em>Tip: Usa il tasto TAB nell'editor per indentare il codice correttamente.</em></p>
             </div>
         `,
         lab: `
             <div class="help-section">
-                <h4>🧪 Relazione di Laboratorio</h4>
-                <p>Campi specifici per esercitazioni.</p>
+                <h4>🧪 Lab Specialist Mode</h4>
+                <p>Perfetta per le esercitazioni tecniche. Segui questi passaggi per una relazione da 10:</p>
+                <ul class="help-list">
+                    <li><strong>📝 Testo:</strong> Compila le sezioni (Obiettivi, Materiali, ecc.). Puoi usare <strong>**grassetto**</strong> con CTRL+B.</li>
+                    <li><strong>🔢 Formule:</strong> Scrivi formule matematiche tra simboli del dollaro, es: <code>$E = mc^2$</code>.</li>
+                    <li><strong>📈 Grafici & Tabelle:</strong> Clicca "Aggiungi Tabella/Grafico" e inserisci i dati separati da virgola (es: <code>1, 10</code>).</li>
+                    <li><strong>⚡ Circuiti:</strong> Usa l'editor grafico per trascinare componenti e collegarli con i fili (clicca sui punti blu per spostarli).</li>
+                </ul>
             </div>
         `,
         plc: `
             <div class="help-section">
                 <h4>🏭 PLC Integrator</h4>
-                <p>Specifica il modello della CPU e l'ambiente di sviluppo.</p>
+                <p>Progettata per chi lavora con TIA Portal, Step7 o Codesys.</p>
                 <ul class="help-list">
-                    <li><strong>Codice:</strong> Incolla il sorgente SCL/ST nei tab.</li>
-                    <li><strong>Screenshot:</strong> Carica immagini del Ladder (LAD) o FBD.</li>
+                    <li><strong>📦 Importazione:</strong> Puoi caricare file XML o ST direttamente dal tuo software PLC.</li>
+                    <li><strong>🎞️ Logica visiva:</strong> Carica screenshot del tuo codice Ladder (LAD) nella sezione Extra.</li>
+                    <li><strong>⚙️ Hardware:</strong> Specifica sempre il modello di CPU e l'ambiente usato nell'intestazione.</li>
                 </ul>
             </div>
         `
