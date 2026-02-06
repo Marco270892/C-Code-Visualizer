@@ -88,15 +88,35 @@ body::before {
     backdrop-filter: blur(16px);
     border: 1px solid var(--border-color);
     border-radius: 1.5rem;
-    padding: 3rem 2rem;
+    padding: 2.5rem 2rem;
     text-align: center;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
     cursor: pointer;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 1.5rem;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    height: 100%;
+}
+
+.mode-card h3 {
+    font-size: 1.4rem;
+    font-weight: 700;
+    margin-bottom: 1rem;
+}
+
+.mode-card p {
+    color: var(--text-secondary);
+    line-height: 1.6;
+    margin-bottom: 2rem;
+    font-size: 0.95rem;
+    flex-grow: 1;
+    /* Pushes button to bottom */
+}
+
+.mode-card .btn {
+    width: 100%;
+    margin-top: auto;
 }
 
 .mode-card:hover {
@@ -118,15 +138,8 @@ body::before {
     margin-bottom: 0.5rem;
 }
 
-.mode-card h3 {
-    font-size: 1.5rem;
-    font-weight: 700;
-}
-
-.mode-card p {
-    color: var(--text-secondary);
-    line-height: 1.6;
-    margin-bottom: 1rem;
+.mode-card:hover h3 {
+    color: var(--accent-color);
 }
 
 @keyframes fadeIn {
@@ -274,23 +287,29 @@ textarea#code-input {
 }
 
 /* File Tabs Styles */
+/* File Tabs Styles */
 .file-tabs-bar {
     display: flex;
     overflow-x: auto;
-    background: rgba(0, 0, 0, 0.2);
+    background: rgba(15, 23, 42, 0.8);
     border-bottom: 1px solid var(--border-color);
-    padding: 0 10px;
-    gap: 2px;
+    padding: 0;
+    scrollbar-width: none;
+}
+
+.file-tabs-bar::-webkit-scrollbar {
+    display: none;
 }
 
 .file-tab {
-    padding: 10px 15px;
-    background: transparent;
+    padding: 12px 20px;
+    background: rgba(255, 255, 255, 0.02);
     color: var(--text-secondary);
     font-size: 0.85rem;
     font-family: var(--font-mono);
     cursor: pointer;
-    border-top: 2px solid transparent;
+    border-right: 1px solid var(--border-color);
+    border-bottom: 2px solid transparent;
     display: flex;
     align-items: center;
     gap: 8px;
@@ -304,9 +323,9 @@ textarea#code-input {
 }
 
 .file-tab.active {
-    background: var(--card-bg);
+    background: #1e293b;
     color: var(--accent-color);
-    border-top-color: var(--accent-color);
+    border-bottom-color: var(--accent-color);
     font-weight: 600;
 }
 
