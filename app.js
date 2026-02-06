@@ -999,19 +999,97 @@ document.addEventListener('DOMContentLoaded', () => {
             return Math.round(val / this.gridSize) * this.gridSize;
         },
 
+        getComponentTerminals(c) {
+            const rad = (c.rotation * Math.PI) / 180;
+            const cos = Math.cos(rad);
+            const sin = Math.sin(rad);
+
+            const getPos = (lx, ly) => {
+                return {
+                    x: c.x + lx * cos - ly * sin,
+                    y: c.y + lx * sin + ly * cos
+                };
+            };
+
+            const type = c.type;
+            const pts = [];
+            // Two-pin components (most)
+            if (['resistor', 'potentiometer', 'capacitor', 'inductor', 'diode', 'led', 'diode-led', 'diode-zener', 'diode-schottky', 'diode-photo', 'diode-tvs', 'varactor', 'battery', 'acsource', 'bulb', 'switch', 'voltmeter', 'ammeter', 'multimeter'].includes(type)) {
+                let d = 20;
+                if (['capacitor', 'inductor', 'battery', 'acsource', 'switch', 'diode', 'led', 'diode-led', 'diode-zener', 'diode-schottky', 'diode-photo', 'diode-tvs', 'varactor'].includes(type)) d = 15;
+                pts.push(getPos(-d, 0), getPos(d, 0));
+            } else if (type === 'transistor-npn' || type === 'transistor-pnp' || type === 'mosfet-n' || type === 'mosfet-p') {
+                pts.push(getPos(-15, 0), getPos(10, -15), getPos(10, 15));
+            } else if (type === 'opamp') {
+                pts.push(getPos(-15, -10), getPos(-15, 10), getPos(15, 0));
+            } else if (type === 'ground') {
+                pts.push(getPos(0, -10));
+            } else if (type === 'oscilloscope' || type === 'powersupply' || type === 'funcgen') {
+                pts.push(getPos(-20, 0), getPos(20, 0));
+            } else if (type === 'diode-bridge') {
+                pts.push(getPos(-15, 0), getPos(15, 0), getPos(0, -15), getPos(0, 15));
+            }
+            return pts;
+        },
+
         onMouseDown(e) {
             if (e.target !== this.canvas) return;
             const pos = this.getMousePos(e);
 
+            // 1. PRIORITÀ SELEZIONE CENTRALE (Se clicco al centro, voglio selezionare, non cablare)
             if (this.tool === 'select') {
-                // 1. Check components (priority)
-                const clickedComp = this.components.find(c => Math.abs(c.x - pos.x) < 30 && Math.abs(c.y - pos.y) < 30);
+                const clickedCenter = this.components.find(c => Math.abs(c.x - pos.x) < 12 && Math.abs(c.y - pos.y) < 12);
+                if (clickedCenter) {
+                    this.selectedId = clickedCenter.id;
+                    this.isDragging = true;
+                    this.dragStart = { x: pos.x - clickedCenter.x, y: pos.y - clickedCenter.y };
+                    this.draw();
+                    return;
+                }
+            }
+
+            // 2. SMART TERMINAL CHECK (PRIORITY PER I CAVI SE NON HO CLICCATO AL CENTRO)
+            if (this.tool === 'select' || this.tool === 'wire') {
+                let nearestTerminal = null;
+                let minDist = 15;
+                this.components.forEach(c => {
+                    this.getComponentTerminals(c).forEach(t => {
+                        const d = Math.sqrt(Math.pow(t.x - pos.x, 2) + Math.pow(t.y - pos.y, 2));
+                        if (d < minDist) {
+                            minDist = d;
+                            nearestTerminal = t;
+                        }
+                    });
+                });
+
+                if (nearestTerminal) {
+                    this.tool = 'wire';
+                    this.isDragging = true;
+                    this.tempWire = {
+                        x1: nearestTerminal.x,
+                        y1: nearestTerminal.y,
+                        x2: nearestTerminal.x,
+                        y2: nearestTerminal.y
+                    };
+
+                    document.querySelectorAll('.circuit-tool').forEach(b => b.classList.remove('active'));
+                    const wireBtn = document.querySelector('[data-tool="wire"]');
+                    if (wireBtn) wireBtn.classList.add('active');
+
+                    this.draw();
+                    return;
+                }
+            }
+
+            if (this.tool === 'select') {
+                // Click più largo se non abbiamo beccato terminali o centro esatto
+                const clickedComp = this.components.find(c => Math.abs(c.x - pos.x) < 20 && Math.abs(c.y - pos.y) < 20);
                 if (clickedComp) {
                     this.selectedId = clickedComp.id;
                     this.isDragging = true;
                     this.dragStart = { x: pos.x - clickedComp.x, y: pos.y - clickedComp.y };
                 } else {
-                    // 2. Check wires
+                    // Check wires
                     const clickedWire = this.wires.find(w => {
                         const dist = this.distToSegment(pos, { x: w.x1, y: w.y1 }, { x: w.x2, y: w.y2 });
                         return dist < 10;
@@ -1037,10 +1115,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     else return;
                 }
                 this.components.push(newComp);
-                this.tool = 'select'; // Switch back to select
-                document.querySelectorAll('.circuit-tool').forEach(b => b.classList.remove('active'));
-                const selBtn = document.querySelector('[data-tool="select"]');
-                if (selBtn) selBtn.classList.add('active');
+                // Switch back to select tool - RIMOSSO per comodità utente (permette di piazzare più componenti)
 
                 this.draw();
                 Renderer.updateAll(); // Update preview
@@ -1051,18 +1126,37 @@ document.addEventListener('DOMContentLoaded', () => {
             const pos = this.getMousePos(e);
 
             // Hover detection
-            const hoveredComp = this.components.find(c => Math.abs(c.x - pos.x) < 30 && Math.abs(c.y - pos.y) < 30);
+            const hoveredComp = this.components.find(c => Math.abs(c.x - pos.x) < 25 && Math.abs(c.y - pos.y) < 25);
             const hoveredWire = hoveredComp ? null : this.wires.find(w => {
                 const dist = this.distToSegment(pos, { x: w.x1, y: w.y1 }, { x: w.x2, y: w.y2 });
                 return dist < 10;
             });
 
-            const hovered = hoveredComp || hoveredWire;
-            const newHoverId = hovered ? hovered.id : null;
+            // Hover detection per terminali
+            let hoveredTerminal = false;
+            if (this.tool === 'select' || this.tool === 'wire') {
+                this.components.forEach(c => {
+                    this.getComponentTerminals(c).forEach(t => {
+                        const d = Math.sqrt(Math.pow(t.x - pos.x, 2) + Math.pow(t.y - pos.y, 2));
+                        if (d < 15) hoveredTerminal = true;
+                    });
+                });
+            }
 
-            if (this.hoverId !== newHoverId) {
+            const hovered = hoveredComp || hoveredWire || hoveredTerminal;
+            const newHoverId = (hoveredComp || hoveredWire) ? (hoveredComp || hoveredWire).id : null;
+
+            if (this.hoverId !== newHoverId || this.lastHoveredTerminal !== hoveredTerminal) {
                 this.hoverId = newHoverId;
-                this.canvas.style.cursor = hovered ? 'pointer' : (this.tool === 'wire' ? 'crosshair' : 'default');
+                this.lastHoveredTerminal = hoveredTerminal;
+
+                if (hoveredTerminal) {
+                    this.canvas.style.cursor = 'crosshair';
+                } else if (hovered) {
+                    this.canvas.style.cursor = 'pointer';
+                } else {
+                    this.canvas.style.cursor = (this.tool === 'wire') ? 'crosshair' : 'default';
+                }
                 this.draw();
             }
 
@@ -1076,8 +1170,22 @@ document.addEventListener('DOMContentLoaded', () => {
                     this.draw();
                 }
             } else if (this.tool === 'wire' && this.tempWire) {
-                this.tempWire.x2 = this.snap(pos.x);
-                this.tempWire.y2 = this.snap(pos.y);
+                // ANTEPRIMA CON AGGANCIO REALE (Snap ai terminali durante il movimento)
+                let nearest = null;
+                this.components.forEach(comp => {
+                    this.getComponentTerminals(comp).forEach(t => {
+                        const d = Math.sqrt(Math.pow(t.x - pos.x, 2) + Math.pow(t.y - pos.y, 2));
+                        if (d < 15) nearest = t;
+                    });
+                });
+
+                if (nearest) {
+                    this.tempWire.x2 = nearest.x;
+                    this.tempWire.y2 = nearest.y;
+                } else {
+                    this.tempWire.x2 = this.snap(pos.x);
+                    this.tempWire.y2 = this.snap(pos.y);
+                }
                 this.draw();
             }
         },
@@ -1086,6 +1194,18 @@ document.addEventListener('DOMContentLoaded', () => {
             if (this.isDragging) {
                 if (this.tool === 'wire' && this.tempWire) {
                     if (this.tempWire.x1 !== this.tempWire.x2 || this.tempWire.y1 !== this.tempWire.y2) {
+                        // SMART END SNAPPING
+                        let nearestEnd = null;
+                        this.components.forEach(c => {
+                            this.getComponentTerminals(c).forEach(t => {
+                                const d = Math.sqrt(Math.pow(t.x - this.tempWire.x2, 2) + Math.pow(t.y - this.tempWire.y2, 2));
+                                if (d < 15) nearestEnd = t;
+                            });
+                        });
+                        if (nearestEnd) {
+                            this.tempWire.x2 = nearestEnd.x;
+                            this.tempWire.y2 = nearestEnd.y;
+                        }
                         this.wires.push({ ...this.tempWire, id: Date.now() });
                     }
                     this.tempWire = null;
@@ -1142,32 +1262,40 @@ document.addEventListener('DOMContentLoaded', () => {
                 this.ctx.translate(c.x, c.y);
                 this.ctx.rotate((c.rotation * Math.PI) / 180);
 
-                // Visual feedback: Highlight if selected or hovered
-                if (c.id === this.selectedId) {
-                    this.ctx.shadowBlur = 15;
-                    this.ctx.shadowColor = '#38bdf8';
+                const isSelected = c.id === this.selectedId;
+                const isHovered = c.id === this.hoverId;
 
-                    // Add a selection ring
+                if (isSelected || isHovered) {
                     this.ctx.beginPath();
-                    this.ctx.strokeStyle = 'rgba(56, 189, 248, 0.5)';
-                    this.ctx.setLineDash([5, 5]);
-                    this.ctx.arc(0, 0, 25, 0, Math.PI * 2);
-                    this.ctx.stroke();
+                    this.ctx.strokeStyle = isSelected ? '#38bdf8' : 'rgba(255, 255, 255, 0.15)';
+                    this.ctx.lineWidth = 1;
+                    this.ctx.setLineDash([3, 3]);
+                    // Box ancora più piccolo e discreto
+                    this.ctx.strokeRect(-18, -14, 36, 28);
                     this.ctx.setLineDash([]);
-                } else if (c.id === this.hoverId) {
-                    this.ctx.shadowBlur = 10;
-                    this.ctx.shadowColor = 'rgba(255, 255, 255, 0.5)';
                 }
 
-                this.drawComponent(c.type, c);
+                this.drawComponent(c.type, c, isSelected ? '#38bdf8' : '#f8fafc');
                 this.ctx.restore();
             });
+
+            // Visual guide: Draw terminal points when in wire mode
+            if (this.tool === 'wire') {
+                this.components.forEach(c => {
+                    this.getComponentTerminals(c).forEach(t => {
+                        this.ctx.beginPath();
+                        this.ctx.fillStyle = 'rgba(56, 189, 248, 0.6)';
+                        this.ctx.arc(t.x, t.y, 3, 0, Math.PI * 2);
+                        this.ctx.fill();
+                    });
+                });
+            }
         },
 
-        drawComponent(type, c) {
-            this.ctx.strokeStyle = '#f8fafc';
+        drawComponent(type, c, color = '#f8fafc') {
+            this.ctx.strokeStyle = color;
             this.ctx.lineWidth = 2;
-            this.ctx.fillStyle = '#f8fafc';
+            this.ctx.fillStyle = color;
             this.ctx.beginPath();
 
             if (type === 'resistor' || type === 'potentiometer') {
