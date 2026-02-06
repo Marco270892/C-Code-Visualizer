@@ -140,6 +140,8 @@ document.addEventListener('DOMContentLoaded', () => {
             // Restore content of active file to editor
             const activeFile = State.files.find(f => f.id === State.activeFileId);
             if (activeFile) UI.inputs.code.value = activeFile.content;
+
+            this.draggedFileId = null;
         },
 
         addFile() {
@@ -239,9 +241,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         renderTabs() {
             UI.inputs.tabsBar.innerHTML = '';
-            State.files.forEach(file => {
+            State.files.forEach((file, index) => {
                 const tab = document.createElement('div');
                 tab.className = `file-tab ${file.id === State.activeFileId ? 'active' : ''}`;
+                tab.draggable = true;
+                tab.dataset.id = file.id;
+                tab.dataset.index = index;
 
                 const nameSpan = document.createElement('span');
                 nameSpan.textContent = file.name;
@@ -256,12 +261,54 @@ document.addEventListener('DOMContentLoaded', () => {
                     tab.appendChild(closeBtn);
                 }
 
+                // Interaction Events
                 tab.onclick = () => {
                     if (file.id !== State.activeFileId) this.switchToFile(file.id);
                 };
 
+                // Drag & Drop Events
+                tab.ondragstart = (e) => {
+                    this.draggedFileId = file.id;
+                    tab.classList.add('dragging');
+                    e.dataTransfer.effectAllowed = 'move';
+                };
+
+                tab.ondragend = () => {
+                    tab.classList.remove('dragging');
+                    document.querySelectorAll('.file-tab').forEach(t => t.classList.remove('drag-over'));
+                };
+
+                tab.ondragover = (e) => {
+                    e.preventDefault();
+                    tab.classList.add('drag-over');
+                };
+
+                tab.ondragleave = () => {
+                    tab.classList.remove('drag-over');
+                };
+
+                tab.ondrop = (e) => {
+                    e.preventDefault();
+                    const targetId = file.id;
+                    if (this.draggedFileId && this.draggedFileId !== targetId) {
+                        this.reorderFiles(this.draggedFileId, targetId);
+                    }
+                };
+
                 UI.inputs.tabsBar.appendChild(tab);
             });
+        },
+
+        reorderFiles(draggedId, targetId) {
+            const draggedIdx = State.files.findIndex(f => f.id === draggedId);
+            const targetIdx = State.files.findIndex(f => f.id === targetId);
+
+            if (draggedIdx !== -1 && targetIdx !== -1) {
+                const [draggedFile] = State.files.splice(draggedIdx, 1);
+                State.files.splice(targetIdx, 0, draggedFile);
+                this.renderTabs();
+                Renderer.updateAll();
+            }
         }
     };
 
@@ -1041,10 +1088,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (Math.abs(w.x1 - w.x2) < 5 || Math.abs(w.y1 - w.y2) < 5) {
                 segments.push({ x: w.x2, y: w.y2 });
             } else {
-                // Percorso a L (Default: orizzontale poi verticale)
-                // Usiamo una logica semplice: se la distanza X è maggiore, iniziamo con X
-                // Oppure facciamo uno split a metà per un look più pulito
-                const midX = w.x1 + (w.x2 - w.x1) / 2;
+                // Utilizza midX personalizzato se presente, altrimenti calcola la metà
+                const midX = (w.midX !== undefined) ? w.midX : (w.x1 + (w.x2 - w.x1) / 2);
                 segments.push({ x: midX, y: w.y1 });
                 segments.push({ x: midX, y: w.y2 });
                 segments.push({ x: w.x2, y: w.y2 });
@@ -1058,8 +1103,27 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // 1. PRIORITÀ SELEZIONE CENTRALE (Se clicco al centro, voglio selezionare, non cablare)
             if (this.tool === 'select') {
+                // 1. PRIORITÀ MANIGLIE FILO (Se un filo è già selezionato)
+                if (this.selectedId) {
+                    const selWire = this.wires.find(w => w.id === this.selectedId);
+                    if (selWire) {
+                        const segments = this.getWireSegments(selWire);
+                        for (let i = 0; i < segments.length; i++) {
+                            const p = segments[i];
+                            if (Math.abs(p.x - pos.x) < 10 && Math.abs(p.y - pos.y) < 10) {
+                                this.isDragging = true;
+                                this.dragType = 'wire-handle';
+                                this.dragHandleIdx = i;
+                                this.draw(); // Redraw to show active handle
+                                return;
+                            }
+                        }
+                    }
+                }
+
                 const clickedCenter = this.components.find(c => Math.abs(c.x - pos.x) < 12 && Math.abs(c.y - pos.y) < 12);
                 if (clickedCenter) {
+                    this.dragType = 'component';
                     this.selectedId = clickedCenter.id;
                     this.isDragging = true;
                     this.dragStart = { x: pos.x - clickedCenter.x, y: pos.y - clickedCenter.y };
@@ -1189,11 +1253,29 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!this.isDragging) return;
 
             if (this.tool === 'select' && this.selectedId) {
-                const c = this.components.find(x => x.id === this.selectedId);
-                if (c) {
-                    c.x = this.snap(pos.x - this.dragStart.x);
-                    c.y = this.snap(pos.y - this.dragStart.y);
-                    this.draw();
+                if (this.dragType === 'wire-handle') {
+                    const w = this.wires.find(x => x.id === this.selectedId);
+                    if (w) {
+                        const newX = this.snap(pos.x);
+                        const newY = this.snap(pos.y);
+
+                        if (this.dragHandleIdx === 0) { // Start
+                            w.x1 = newX; w.y1 = newY;
+                        } else if (this.dragHandleIdx === 3 || (this.dragHandleIdx === 1 && Math.abs(w.x1 - w.x2) < 5)) { // End
+                            w.x2 = newX; w.y2 = newY;
+                        } else { // One of the mid corners
+                            w.midX = newX;
+                        }
+                        this.draw();
+                    }
+                } else {
+                    // Dragging component
+                    const c = this.components.find(x => x.id === this.selectedId);
+                    if (c) {
+                        c.x = this.snap(pos.x - this.dragStart.x);
+                        c.y = this.snap(pos.y - this.dragStart.y);
+                        this.draw();
+                    }
                 }
             } else if (this.tool === 'wire' && this.tempWire) {
                 // ANTEPRIMA CON AGGANCIO REALE (Snap ai terminali durante il movimento)
@@ -1261,9 +1343,12 @@ document.addEventListener('DOMContentLoaded', () => {
             // Wires
             this.wires.forEach(w => {
                 const segments = this.getWireSegments(w);
+                const isSelected = w.id === this.selectedId;
+                const isHovered = w.id === this.hoverId;
+
                 this.ctx.beginPath();
-                this.ctx.strokeStyle = (w.id === this.selectedId) ? '#38bdf8' : (w.id === this.hoverId ? '#f8fafc' : '#94a3b8');
-                this.ctx.lineWidth = (w.id === this.selectedId || w.id === this.hoverId) ? 3 : 2;
+                this.ctx.strokeStyle = isSelected ? '#38bdf8' : (isHovered ? '#f8fafc' : '#94a3b8');
+                this.ctx.lineWidth = (isSelected || isHovered) ? 3 : 2;
 
                 this.ctx.moveTo(segments[0].x, segments[0].y);
                 for (let i = 1; i < segments.length; i++) {
@@ -1271,9 +1356,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 this.ctx.stroke();
 
-                // Draw dots at wire ends if they connect to other things (junctions)
+                // Draw Junctions
                 this.drawJunction(w.x1, w.y1);
                 this.drawJunction(w.x2, w.y2);
+
+                // DRAW HANDLES if selected (like in the user photo)
+                if (isSelected) {
+                    this.ctx.fillStyle = '#38bdf8';
+                    segments.forEach(p => {
+                        this.ctx.fillRect(p.x - 4, p.y - 4, 8, 8);
+                    });
+                }
             });
 
             if (this.tempWire) {

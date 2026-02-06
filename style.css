@@ -340,6 +340,16 @@ textarea#code-input {
     justify-content: center;
 }
 
+.file-tab.dragging {
+    opacity: 0.4;
+    background: rgba(56, 189, 248, 0.1);
+}
+
+.file-tab.drag-over {
+    border-left: 2px solid var(--accent-color);
+    background: rgba(255, 255, 255, 0.1);
+}
+
 .close-tab:hover {
     background: rgba(239, 68, 68, 0.2);
     color: #ef4444;
