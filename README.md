@@ -1,50 +1,53 @@
-# C Code & Lab Report Generator
+# 📄 C Code & Lab Report Generator - Guida Facile
 
-Benvenuto in **C Code & Lab Report Generator**, uno strumento web premium progettato per studenti e sviluppatori che desiderano creare documenti professionali a partire dal proprio codice C o relazioni tecniche di laboratorio spettacolari.
-
-![Anteprima Progetto](https://via.placeholder.com/800x450/1e293b/38bdf8?text=C+Code+%26+Lab+Report+Generator)
-
-## 🚀 Funzionalità Principali
-
-Il programma offre due modalità principali, ottimizzate per scopi diversi:
-
-### 1. 💻 Software Developer Mode
-*   **Evidenziazione della Sintassi**: Formattazione professionale del codice C grazie all'integrazione con **Prism.js**.
-*   **Export PDF Pulito**: Trasforma il tuo codice in un documento PDF pronto per la consegna o la condivisione.
-*   **Guida Interattiva**: Un nuovo tasto "Info Guide" fornisce istruzioni dettagliate su come compilare i campi della modalità attiva.
-*   **Shortcut Rapide**: Supporto per l'indentazione con TAB nell'editor.
-
-### 2. 🧪 Lab Specialist Mode
-*   **Relazioni Complete**: Inserisci obiettivi, materiali, strumenti, software e conclusioni.
-*   **Supporto LaTeX**: Scrivi formule matematiche complesse (es. $E = mc^2$ o $\frac{\Delta y}{\Delta x}$) in modo nativo grazie a **MathJax**.
-*   **Tabelle e Grafici Dinamici**: Inserisci dati in formato CSV e genera automaticamente tabelle formattate e grafici a linee interattivi con **Chart.js**.
-*   **Logo Personalizzato**: Carica il logo della tua scuola o del tuo team per un tocco professionale.
-
-### ✨ Altre Caratteristiche
-*   **Salvataggio Automatico**: Tutti i dati vengono salvati localmente nel browser (LocalStorage), così non perderai mai il tuo lavoro in caso di chiusura accidentale della pagina.
-*   **Design Premium**: Interfaccia moderna in Dark Mode con estetica curata e micro-animazioni.
-*   **Offline Ready**: Le librerie necessarie sono incluse nel progetto, permettendone l'uso anche senza connessione internet.
-
-## 🛠️ Tecnologie Utilizzate
-
-*   **Core**: HTML5, CSS3 (Vanilla), JavaScript (ES6+).
-*   **Highlighting**: [Prism.js](https://prismjs.com/) con tema Tomorrow Night.
-*   **PDF Generation**: [jsPDF](https://github.com/parallax/jsPDF) e [html2canvas](https://html2canvas.hertzen.com/).
-*   **Math Content**: [MathJax](https://www.mathjax.org/).
-*   **Visualizzazione Dati**: [Chart.js](https://www.chartjs.org/).
-
-## 📖 Come Iniziare
-
-1.  Scarica o clona la repository.
-2.  Apri il file `index.html` in qualsiasi browser moderno (Chrome, Firefox, Edge, Safari).
-3.  Scegli la modalità desiderata dalla Home Screen.
-4.  Compila i campi, scrivi il codice o inserisci i dati del laboratorio.
-5.  Clicca su **"Scarica PDF"** per ottenere il tuo documento finito.
-
-## 📝 Note sull'Editor
-*   **Grassetto**: Puoi usare il formato Markdown `**testo**` nelle aree di testo per rendere le parole in grassetto.
-*   **Scorciatoie**: Usa `CTRL + B` per inserire rapidamente i tag del grassetto.
+Benvenuto! Questa applicazione è stata creata per aiutarti a trasformare i tuoi esercizi di scuola o progetti di lavoro in bellissimi documenti PDF professionali, senza dover impazzire con Word o altri programmi complicati.
 
 ---
 
-Progettato con ❤️ per la massima produttività.
+## 🌟 Cosa puoi fare con questo programma?
+
+Abbiamo creato 4 modalità diverse per ogni tua esigenza:
+
+1.  **💻 Software Developer**: Incolla il tuo codice C e lui lo colorerà come un vero editor di programmazione.
+2.  **🧪 Lab Specialist**: Perfetto per le relazioni di laboratorio. Puoi inserire obiettivi, materiali e persino creare grafici partendo dai tuoi dati.
+3.  **📊 Flowchart Designer**: Scrivi due righe di testo e lui disegnerà per te un diagramma di flusso logico.
+4.  **🏭 PLC Integrator**: Carica i tuoi file Siemens/Schneider (SCL/LAD) e crea una relazione tecnica completa.
+
+---
+
+## 🛠️ Come si usa? (Passo dopo Passo)
+
+Non serve essere un esperto, ecco come fare:
+
+1.  **Scegli la modalità**: Nella pagina iniziale, clicca sulla scheda che ti interessa (es. "Inizia Laboratorio").
+2.  **Compila l'intestazione**: Inserisci il titolo del progetto, il tuo nome, la classe e la data. Puoi anche caricare il **logo della tua scuola**!
+3.  **Inserisci il contenuto**:
+    *   **Codice**: Scrivi o incolla il codice. Puoi aggiungere più file cliccando su "+ Nuovo File".
+    *   **Laboratorio**: Scrivi cosa hai fatto nelle aree di testo.
+    *   **Immagini**: Carica gli screenshot dei tuoi risultati nella sezione "Extra".
+4.  **Guarda l'anteprima**: A destra vedrai sempre come sta venendo il tuo foglio PDF.
+5.  **Scarica**: Quando sei soddisfatto, clicca sul tastone blu **"Scarica PDF"** in alto. Fatto!
+
+---
+
+## 💡 I "Trucchi" per un documento perfetto
+
+Ecco alcune funzioni speciali che ti faranno fare un figurone:
+
+*   **⚡ Spostare i file**: Se hai aggiunto più file di codice, puoi **trascinare le linguette** con il mouse per cambiare l'ordine in cui appariranno nel PDF.
+*   **📐 Schemi Elettrici**: Nella modalità Laboratorio trovi un editor di circuiti! Clicca sui componenti (resistenze, led, ecc.) e trascinali sul disegno. Puoi collegarli con i fili e **spostare i fili** cliccando sui quadratini blu.
+*   **🔢 Formule Matematiche**: Vuoi scrivere formule bellissime come nei libri? Usa i simboli del dollaro, ad esempio: `$V = R * I$`. Il programma la trasformerà in una formula matematica vera!
+*   **📈 Grafici Automatici**: Inserisci i tuoi dati separati da una virgola (es: `1, 10`) e il programma disegnerà il grafico per te.
+*   **💾 Non perdi nulla**: Il programma salva tutto quello che scrivi nel tuo browser. Se chiudi la pagina per sbaglio, quando torni ritroverai tutto lì.
+
+---
+
+## ❓ Problemi comuni
+
+*   **Non vedo le modifiche su GitHub?**: Se hai appena aggiornato il sito, premi `CTRL + F5` sulla tastiera per forzare il refresh.
+*   **Il PDF è tagliato?**: Assicurati di non inserire tabelle troppo larghe o codici infiniti senza spazi, il programma cerca di adattare tutto al foglio A4.
+*   **Posso usarlo sul telefono?**: Sì! Ora funziona anche con il touch, ma per disegnare i circuiti consigliamo caldamente un mouse.
+
+---
+
+Progettato con ❤️ per semplificarti la vita a scuola!
