@@ -34,6 +34,32 @@
     <!-- (Mermaid removed to avoid conflicts) -->
     <!-- Chart.js for graphs (Online CDN) -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- CodeMirror 5 CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.css">
+    <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/theme/tomorrow-night-bright.min.css">
+    <style>
+        /* CodeMirror Custom Tweaks */
+        .CodeMirror {
+            height: 500px;
+            border-radius: 0.8rem;
+            font-family: var(--font-mono);
+            font-size: 14px;
+            border: 1px solid var(--border-color);
+            background: rgba(15, 23, 42, 0.5) !important;
+            padding: 8px;
+        }
+
+        .CodeMirror-gutters {
+            background: rgba(30, 41, 59, 0.8) !important;
+            border-right: 1px solid var(--border-color);
+        }
+
+        .CodeMirror-linenumber {
+            color: #64748b;
+        }
+    </style>
 </head>
 
 <body>
@@ -125,6 +151,36 @@
                     </svg>
                     Info Guide
                 </button>
+                <div style="position: absolute; right: 120px; display: flex; gap: 10px;">
+                    <button id="export-project-btn" class="btn btn-secondary btn-sm">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="17 8 12 3 7 8"></polyline>
+                            <line x1="12" y1="3" x2="12" y2="15"></line>
+                        </svg>
+                        Esporta Progetto
+                    </button>
+                    <button id="import-project-btn" class="btn btn-secondary btn-sm">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                            <line x1="12" y1="8" x2="12" y2="16"></line>
+                            <line x1="8" y1="12" x2="16" y2="12"></line>
+                        </svg>
+                        Importa Progetto
+                    </button>
+                    <button id="toolbox-btn" class="btn btn-accent btn-sm">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path
+                                d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z">
+                            </path>
+                        </svg>
+                        Toolbox
+                    </button>
+                    <input type="file" id="import-project-upload" class="hidden" accept=".lab,.json">
+                </div>
             </div>
             <p id="app-type-subtitle" class="subtitle">Incolla il tuo codice C, visualizzalo con syntax highlighting e
                 scaricalo in PDF.</p>
@@ -626,6 +682,111 @@ cond(no)->op1" spellcheck="false" class="code-editor-area"
         </div>
     </div>
 
+    <!-- Electronic Toolbox Modal -->
+    <div id="toolbox-modal" class="modal-overlay hidden">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <h2>🧮 Toolbox Elettronico</h2>
+                <button id="close-toolbox" class="btn-close">&times;</button>
+            </div>
+            <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+                <div class="help-section">
+                    <h4>🛠️ Calcolatore Legge di Ohm</h4>
+                    <p style="font-size: 0.8rem; margin-bottom: 15px;">Inserisci 2 valori e clicca calcola per trovare
+                        il terzo.</p>
+                    <div class="customization-grid" style="grid-template-columns: 1fr 1fr 1fr; gap: 10px; padding: 0;">
+                        <div class="input-group">
+                            <label>V (Volt)</label>
+                            <input type="number" id="ohm-v" placeholder="V" step="any">
+                        </div>
+                        <div class="input-group">
+                            <label>R (Ω)</label>
+                            <input type="number" id="ohm-r" placeholder="R" step="any">
+                        </div>
+                        <div class="input-group">
+                            <label>I (A)</label>
+                            <input type="number" id="ohm-i" placeholder="I" step="any">
+                        </div>
+                    </div>
+                    <button id="calc-ohm-btn" class="btn btn-primary btn-sm"
+                        style="margin-top: 10px; width: 100%;">Calcola Mancante</button>
+                    <div id="ohm-status"
+                        style="margin-top: 10px; font-size: 0.85rem; color: var(--accent-color); text-align: center;">
+                    </div>
+                </div>
+
+                <div class="help-section"
+                    style="margin-top: 25px; border-top: 1px dashed var(--border-color); padding-top: 15px;">
+                    <h4>🎨 Codice Colori Resistenze (4 Bande)</h4>
+                    <div id="res-result"
+                        style="margin: 15px 0; font-weight: bold; text-align: center; color: var(--accent-color); font-size: 1.4rem; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 8px;">
+                        -- Ω</div>
+                    <div class="customization-grid"
+                        style="grid-template-columns: repeat(4, 1fr); gap: 8px; padding: 0;">
+                        <div class="input-group">
+                            <label>Cifra 1</label>
+                            <select id="res-band-1"
+                                style="background:#1e293b; color:white; border-radius:6px; padding:8px; border:1px solid var(--border-color);">
+                                <option value="0">Nero</option>
+                                <option value="1">Marrone</option>
+                                <option value="2">Rosso</option>
+                                <option value="3">Arancio</option>
+                                <option value="4">Giallo</option>
+                                <option value="5">Verde</option>
+                                <option value="6">Blu</option>
+                                <option value="7">Viola</option>
+                                <option value="8">Grigio</option>
+                                <option value="9">Bianco</option>
+                            </select>
+                        </div>
+                        <div class="input-group">
+                            <label>Cifra 2</label>
+                            <select id="res-band-2"
+                                style="background:#1e293b; color:white; border-radius:6px; padding:8px; border:1px solid var(--border-color);">
+                                <option value="0">Nero</option>
+                                <option value="1">Marrone</option>
+                                <option value="2">Rosso</option>
+                                <option value="3">Arancio</option>
+                                <option value="4">Giallo</option>
+                                <option value="5">Verde</option>
+                                <option value="6">Blu</option>
+                                <option value="7">Viola</option>
+                                <option value="8">Grigio</option>
+                                <option value="9">Bianco</option>
+                            </select>
+                        </div>
+                        <div class="input-group">
+                            <label>Moltip.</label>
+                            <select id="res-band-mul"
+                                style="background:#1e293b; color:white; border-radius:6px; padding:8px; border:1px solid var(--border-color);">
+                                <option value="1">x1</option>
+                                <option value="10">x10</option>
+                                <option value="100">x100</option>
+                                <option value="1000">x1k</option>
+                                <option value="10000">x10k</option>
+                                <option value="100000">x100k</option>
+                                <option value="1000000">x1M</option>
+                            </select>
+                        </div>
+                        <div class="input-group">
+                            <label>Toll.</label>
+                            <select id="res-band-tol"
+                                style="background:#1e293b; color:white; border-radius:6px; padding:8px; border:1px solid var(--border-color);">
+                                <option value="1">±1%</option>
+                                <option value="2">±2%</option>
+                                <option value="5" selected>±5%</option>
+                                <option value="10">±10%</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="close-toolbox-btn" class="btn btn-secondary">Chiudi</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Prism.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js"></script>
@@ -637,6 +798,12 @@ cond(no)->op1" spellcheck="false" class="code-editor-area"
     <!-- jsPDF & html2canvas -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+    <!-- CodeMirror 5 Main JS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/clike/clike.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/addon/edit/closebrackets.min.js"></script>
+
     <script src="app.js?v=2.1"></script>
 </body>
 
