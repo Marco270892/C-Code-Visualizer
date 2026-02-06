@@ -157,8 +157,8 @@ body::before {
 
 /* Original Container & Main Content */
 .container {
-    max-width: 1450px;
-    width: 100%;
+    max-width: 1650px;
+    width: 95%;
     display: flex;
     flex-direction: column;
     gap: 1.5rem;
@@ -186,22 +186,29 @@ p.subtitle {
 
 .main-content {
     display: grid;
-    grid-template-columns: 1fr auto;
+    grid-template-columns: minmax(400px, 1fr) auto;
     gap: 1.5rem;
-    min-height: 750px;
-    height: auto;
+    align-items: flex-start;
     transition: all 0.3s ease;
 }
 
-.main-content:has(.editor-section.hidden) {
+.editor-side {
     display: flex;
-    justify-content: center;
+    flex-direction: column;
+    gap: 1.5rem;
 }
 
-@media (max-width: 1200px) {
+.main-content:has(.editor-section.hidden) .editor-side {
+    width: 100%;
+}
+
+@media (max-width: 1550px) {
     .main-content {
         grid-template-columns: 1fr;
-        height: auto;
+    }
+
+    .preview-container {
+        min-width: 100%;
     }
 }
 
@@ -403,12 +410,13 @@ textarea#code-input {
 .preview-container {
     flex: 1;
     padding: 2rem 1rem;
-    overflow-y: auto;
+    overflow: auto;
     background: #0f172a;
     display: flex;
     justify-content: center;
     align-items: flex-start;
     min-width: 826px;
+    border-radius: 1rem;
 }
 
 .pdf-page-mock {
