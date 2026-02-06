@@ -951,17 +951,8 @@ document.addEventListener('DOMContentLoaded', () => {
             createSection("Strumenti e Hardware:", UI.labInputs.tools.value);
             createSection("Software:", UI.labInputs.software.value);
             createSection("Descrizione Attività:", UI.labInputs.description.value);
-            createSection("Analisi e Calcoli:", UI.labInputs.calculations.value);
 
-
-            // Render Charts
-            if (State.charts.length > 0) {
-                const chartsWrapper = document.createElement('div');
-                this.renderCharts(chartsWrapper);
-                container.appendChild(chartsWrapper);
-            }
-
-            // Render Circuit Diagram (Beta)
+            // Render Circuit Diagram (Beta) - Moved after Activity Description
             if (window.CircuitEditor) {
                 const circuitImg = CircuitEditor.getImage();
                 if (circuitImg) {
@@ -977,6 +968,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     sectionDiv.appendChild(img);
                     container.appendChild(sectionDiv);
                 }
+            }
+
+            createSection("Analisi e Calcoli:", UI.labInputs.calculations.value);
+
+
+            // Render Charts
+            if (State.charts.length > 0) {
+                const chartsWrapper = document.createElement('div');
+                this.renderCharts(chartsWrapper);
+                container.appendChild(chartsWrapper);
             }
 
             // Trigger MathJax if needed (v2 style)
