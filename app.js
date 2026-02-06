@@ -878,6 +878,16 @@ document.addEventListener('DOMContentLoaded', () => {
             window.addEventListener('mouseup', (e) => this.onMouseUp(e));
             this.canvas.addEventListener('dblclick', (e) => this.onDoubleClick(e));
 
+            // Keyboard Events (Delete/Canc key)
+            window.addEventListener('keydown', (e) => {
+                // If we are typing in an input/textarea, don't delete circuit components
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+                if (e.key === 'Delete' || e.key === 'Backspace') {
+                    this.deleteSelected();
+                }
+            });
+
             // Toolbar & Dropdowns
             document.querySelectorAll('.circuit-tool').forEach(btn => {
                 btn.onclick = (e) => {
@@ -932,13 +942,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const btnDelete = document.getElementById('circuit-delete');
             if (btnDelete) btnDelete.addEventListener('click', () => {
-                if (this.selectedId) {
-                    this.components = this.components.filter(c => c.id !== this.selectedId);
-                    this.wires = this.wires.filter(w => w.id !== this.selectedId);
-                    this.selectedId = null;
-                    this.draw();
-                    Renderer.updateAll();
-                }
+                this.deleteSelected();
             });
 
             const btnRotate = document.getElementById('circuit-rotate');
@@ -955,6 +959,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Initial Draw
             this.draw();
+        },
+
+        deleteSelected() {
+            if (this.selectedId) {
+                this.components = this.components.filter(c => c.id !== this.selectedId);
+                this.wires = this.wires.filter(w => w.id !== this.selectedId);
+                this.selectedId = null;
+                this.draw();
+                if (window.Renderer) Renderer.updateAll();
+                else if (window.Render) Render.updateAll();
+            }
         },
 
         getMousePos(evt) {
@@ -1120,26 +1135,29 @@ document.addEventListener('DOMContentLoaded', () => {
             this.ctx.beginPath();
 
             if (type === 'resistor' || type === 'potentiometer') {
-                this.ctx.moveTo(-15, 0);
-                this.ctx.lineTo(-12, -5);
-                this.ctx.lineTo(-8, 5);
-                this.ctx.lineTo(-4, -5);
-                this.ctx.lineTo(0, 5);
-                this.ctx.lineTo(4, -5);
-                this.ctx.lineTo(8, 5);
-                this.ctx.lineTo(12, -5);
-                this.ctx.lineTo(15, 0);
+                // Resistor body aligned to 20px grid (total width 40, from -20 to 20)
+                this.ctx.moveTo(-20, 0);
+                this.ctx.lineTo(-16, -5);
+                this.ctx.lineTo(-12, 5);
+                this.ctx.lineTo(-8, -5);
+                this.ctx.lineTo(-4, 5);
+                this.ctx.lineTo(0, -5);
+                this.ctx.lineTo(4, 5);
+                this.ctx.lineTo(8, -5);
+                this.ctx.lineTo(12, 5);
+                this.ctx.lineTo(16, -5);
+                this.ctx.lineTo(20, 0);
                 this.ctx.stroke();
 
                 if (type === 'potentiometer') {
-                    // Disegna la freccia del cursore (wiper)
+                    // Wiper arrow (from top)
                     this.ctx.beginPath();
-                    this.ctx.moveTo(0, 15);
-                    this.ctx.lineTo(0, 7);
-                    // Punta della freccia
-                    this.ctx.lineTo(-3, 10);
-                    this.ctx.moveTo(0, 7);
-                    this.ctx.lineTo(3, 10);
+                    this.ctx.moveTo(0, -18);
+                    this.ctx.lineTo(0, -6);
+                    // Arrow head
+                    this.ctx.lineTo(-3, -10);
+                    this.ctx.moveTo(0, -6);
+                    this.ctx.lineTo(3, -10);
                     this.ctx.stroke();
                 }
             } else if (type === 'capacitor') {
