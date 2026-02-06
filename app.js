@@ -1032,6 +1032,26 @@ document.addEventListener('DOMContentLoaded', () => {
             return pts;
         },
 
+        getWireSegments(w) {
+            // Calcolo percorso automatico ortogonale (Manhattan routing)
+            const segments = [{ x: w.x1, y: w.y1 }];
+
+            // Se i punti sono quasi allineati, usiamo un solo angolo
+            // Altrimenti un percorso a Z (scartamento a metà)
+            if (Math.abs(w.x1 - w.x2) < 5 || Math.abs(w.y1 - w.y2) < 5) {
+                segments.push({ x: w.x2, y: w.y2 });
+            } else {
+                // Percorso a L (Default: orizzontale poi verticale)
+                // Usiamo una logica semplice: se la distanza X è maggiore, iniziamo con X
+                // Oppure facciamo uno split a metà per un look più pulito
+                const midX = w.x1 + (w.x2 - w.x1) / 2;
+                segments.push({ x: midX, y: w.y1 });
+                segments.push({ x: midX, y: w.y2 });
+                segments.push({ x: w.x2, y: w.y2 });
+            }
+            return segments;
+        },
+
         onMouseDown(e) {
             if (e.target !== this.canvas) return;
             const pos = this.getMousePos(e);
@@ -1089,10 +1109,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     this.isDragging = true;
                     this.dragStart = { x: pos.x - clickedComp.x, y: pos.y - clickedComp.y };
                 } else {
-                    // Check wires
+                    // Check wires (check all segments)
                     const clickedWire = this.wires.find(w => {
-                        const dist = this.distToSegment(pos, { x: w.x1, y: w.y1 }, { x: w.x2, y: w.y2 });
-                        return dist < 10;
+                        const segments = this.getWireSegments(w);
+                        for (let i = 0; i < segments.length - 1; i++) {
+                            if (this.distToSegment(pos, segments[i], segments[i + 1]) < 8) return true;
+                        }
+                        return false;
                     });
                     this.selectedId = clickedWire ? clickedWire.id : null;
                 }
@@ -1125,11 +1148,14 @@ document.addEventListener('DOMContentLoaded', () => {
         onMouseMove(e) {
             const pos = this.getMousePos(e);
 
-            // Hover detection
+            // Hover detection per componenti e fili
             const hoveredComp = this.components.find(c => Math.abs(c.x - pos.x) < 25 && Math.abs(c.y - pos.y) < 25);
             const hoveredWire = hoveredComp ? null : this.wires.find(w => {
-                const dist = this.distToSegment(pos, { x: w.x1, y: w.y1 }, { x: w.x2, y: w.y2 });
-                return dist < 10;
+                const segments = this.getWireSegments(w);
+                for (let i = 0; i < segments.length - 1; i++) {
+                    if (this.distToSegment(pos, segments[i], segments[i + 1]) < 8) return true;
+                }
+                return false;
             });
 
             // Hover detection per terminali
@@ -1234,11 +1260,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Wires
             this.wires.forEach(w => {
+                const segments = this.getWireSegments(w);
                 this.ctx.beginPath();
                 this.ctx.strokeStyle = (w.id === this.selectedId) ? '#38bdf8' : (w.id === this.hoverId ? '#f8fafc' : '#94a3b8');
                 this.ctx.lineWidth = (w.id === this.selectedId || w.id === this.hoverId) ? 3 : 2;
-                this.ctx.moveTo(w.x1, w.y1);
-                this.ctx.lineTo(w.x2, w.y2);
+
+                this.ctx.moveTo(segments[0].x, segments[0].y);
+                for (let i = 1; i < segments.length; i++) {
+                    this.ctx.lineTo(segments[i].x, segments[i].y);
+                }
                 this.ctx.stroke();
 
                 // Draw dots at wire ends if they connect to other things (junctions)
@@ -1247,11 +1277,14 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             if (this.tempWire) {
+                const segments = this.getWireSegments(this.tempWire);
                 this.ctx.beginPath();
-                this.ctx.strokeStyle = '#38bdf8';
+                this.ctx.strokeStyle = 'rgba(56, 189, 248, 0.6)';
                 this.ctx.setLineDash([5, 5]);
-                this.ctx.moveTo(this.tempWire.x1, this.tempWire.y1);
-                this.ctx.lineTo(this.tempWire.x2, this.tempWire.y2);
+                this.ctx.moveTo(segments[0].x, segments[0].y);
+                for (let i = 1; i < segments.length; i++) {
+                    this.ctx.lineTo(segments[i].x, segments[i].y);
+                }
                 this.ctx.stroke();
                 this.ctx.setLineDash([]);
             }
