@@ -594,6 +594,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 sectionDiv.appendChild(labelDiv);
                 sectionDiv.appendChild(contentDiv);
                 container.appendChild(sectionDiv);
+
+                // Trigger MathJax for conclusions
+                if (window.MathJax) {
+                    window.MathJax.typesetPromise([container]);
+                }
             }
         },
 
