@@ -24,6 +24,9 @@ document.addEventListener('DOMContentLoaded', () => {
         screenshots: [],       // Array of { src: base64, caption: string }
         screenshotLayout: '2', // '1', '2', '3' colonne
         flowchartCode: '',     // Testo codice Mermaid
+
+        // NEW: CodeMirror Instance
+        editor: null,
     };
 
     // ==========================================
@@ -77,7 +80,20 @@ document.addEventListener('DOMContentLoaded', () => {
             flowchart: document.getElementById('flowchart-main-input'),
             screenshotUpload: document.getElementById('screenshot-upload'),
             screenshotLayout: document.getElementById('screenshot-layout-select'),
-            screenshotList: document.getElementById('screenshots-list')
+            screenshotList: document.getElementById('screenshots-list'),
+
+            // New Project Management
+            btnExport: document.getElementById('export-project-btn'),
+            btnImport: document.getElementById('import-project-btn'),
+            importUpload: document.getElementById('import-project-upload'),
+
+            // Toolbox
+            btnToolbox: document.getElementById('toolbox-btn'),
+            toolboxModal: document.getElementById('toolbox-modal'),
+            btnCloseToolbox: document.getElementById('close-toolbox'),
+            btnCloseToolboxBtn: document.getElementById('close-toolbox-btn'),
+            calcOhmBtn: document.getElementById('calc-ohm-btn'),
+            ohmStatus: document.getElementById('ohm-status')
         },
         // Campi Laboratorio
         labInputs: {
@@ -138,10 +154,33 @@ document.addEventListener('DOMContentLoaded', () => {
     // ==========================================
     const FileManager = {
         init() {
+            // NEW: Initialize CodeMirror
+            if (window.CodeMirror && !State.editor) {
+                State.editor = CodeMirror.fromTextArea(UI.inputs.code, {
+                    mode: "text/x-csrc",
+                    theme: "tomorrow-night-bright",
+                    lineNumbers: true,
+                    autoCloseBrackets: true,
+                    matchBrackets: true,
+                    indentUnit: 4,
+                    tabSize: 4,
+                    lineWrapping: true
+                });
+
+                // Link editor changes to application state
+                State.editor.on('change', () => {
+                    this.updateCurrentContent(State.editor.getValue());
+                    Renderer.updateAll();
+                });
+            }
+
             this.renderTabs();
             // Restore content of active file to editor
             const activeFile = State.files.find(f => f.id === State.activeFileId);
-            if (activeFile) UI.inputs.code.value = activeFile.content;
+            if (activeFile) {
+                if (State.editor) State.editor.setValue(activeFile.content);
+                else UI.inputs.code.value = activeFile.content;
+            }
 
             this.draggedFileId = null;
         },
@@ -176,12 +215,25 @@ document.addEventListener('DOMContentLoaded', () => {
         switchToFile(id) {
             // Save current content first
             const currentFile = State.files.find(f => f.id === State.activeFileId);
-            if (currentFile) currentFile.content = UI.inputs.code.value;
+            if (currentFile) {
+                currentFile.content = State.editor ? State.editor.getValue() : UI.inputs.code.value;
+            }
 
             // Switch
             State.activeFileId = id;
             const newFile = State.files.find(f => f.id === id);
-            if (newFile) UI.inputs.code.value = newFile.content;
+            if (newFile) {
+                if (State.editor) {
+                    // Update mode based on file extension
+                    const ext = newFile.name.split('.').pop().toLowerCase();
+                    let mode = "text/x-csrc";
+                    if (ext === 'scl' || ext === 'st' || ext === 'pas') mode = "text/x-pascal";
+                    State.editor.setOption("mode", mode);
+                    State.editor.setValue(newFile.content);
+                } else {
+                    UI.inputs.code.value = newFile.content;
+                }
+            }
 
             this.renderTabs();
             Renderer.updateAll();
@@ -400,7 +452,173 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // ==========================================
-    // 5. GESTIONE DATI E MEMORIA (Storage)
+    // 5. PROJECT MANAGER (Export/Import)
+    // ==========================================
+    const ProjectManager = {
+        export() {
+            const data = {
+                version: "2.5",
+                timestamp: Date.now(),
+                mode: State.mode,
+                title: UI.inputs.title.value,
+                school: UI.inputs.school.value,
+                student: UI.inputs.student.value,
+                date: UI.inputs.date.value,
+                logo: State.logoBase64,
+                files: State.files,
+                screenshots: State.screenshots,
+                screenshotLayout: State.screenshotLayout,
+                flowchart: UI.inputs.flowchart.value,
+                exercise: UI.inputs.exercise.value,
+                lab: {
+                    objectives: UI.labInputs.objectives.value,
+                    materials: UI.labInputs.materials.value,
+                    tools: UI.labInputs.tools.value,
+                    software: UI.labInputs.software.value,
+                    description: UI.labInputs.description.value,
+                    calculations: UI.labInputs.calculations.value,
+                    conclusions: UI.labInputs.conclusions.value,
+                    charts: State.charts,
+                    circuit: window.CircuitEditor ? {
+                        components: CircuitEditor.components,
+                        wires: CircuitEditor.wires
+                    } : null
+                },
+                plc: {
+                    cpu: UI.plcInputs.cpu.value,
+                    env: UI.plcInputs.env.value
+                }
+            };
+
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${UI.inputs.title.value.replace(/ /g, '_')}_progetto.lab`;
+            a.click();
+            URL.revokeObjectURL(url);
+        },
+
+        import(file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const data = JSON.parse(e.target.result);
+
+                    // Restore Global State
+                    UI.inputs.school.value = data.school || '';
+                    UI.inputs.student.value = data.student || '';
+                    UI.inputs.date.value = data.date || '';
+                    State.logoBase64 = data.logo || null;
+
+                    // Restore Fields
+                    UI.inputs.title.value = data.title || '';
+                    UI.inputs.exercise.value = data.exercise || '';
+                    UI.inputs.flowchart.value = data.flowchart || '';
+
+                    State.files = data.files || [];
+                    State.screenshots = data.screenshots || [];
+                    State.screenshotLayout = data.screenshotLayout || '2';
+
+                    if (data.lab) {
+                        UI.labInputs.objectives.value = data.lab.objectives || '';
+                        UI.labInputs.materials.value = data.lab.materials || '';
+                        UI.labInputs.tools.value = data.lab.tools || '';
+                        UI.labInputs.software.value = data.lab.software || '';
+                        UI.labInputs.description.value = data.lab.description || '';
+                        UI.labInputs.calculations.value = data.lab.calculations || '';
+                        UI.labInputs.conclusions.value = data.lab.conclusions || '';
+                        State.charts = data.lab.charts || [];
+
+                        if (data.lab.circuit && window.CircuitEditor) {
+                            CircuitEditor.components = data.lab.circuit.components || [];
+                            CircuitEditor.wires = data.lab.circuit.wires || [];
+                        }
+                    }
+
+                    if (data.plc) {
+                        UI.plcInputs.cpu.value = data.plc.cpu || '';
+                        UI.plcInputs.env.value = data.plc.env || '';
+                    }
+
+                    // Switch to the project mode
+                    Events.switchMode(data.mode || 'code');
+
+                    // Refresh UI
+                    FileManager.init();
+                    ScreenshotManager.renderList();
+                    Renderer.updateAll();
+                    alert("Progetto importato con successo!");
+                } catch (err) {
+                    console.error(err);
+                    alert("Errore durante l'importazione del file .lab");
+                }
+            };
+            reader.readAsText(file);
+        }
+    };
+
+    // ==========================================
+    // 6. ELECTRONIC TOOLBOX
+    // ==========================================
+    const Toolbox = {
+        init() {
+            // Ohm's Law
+            UI.inputs.calcOhmBtn.onclick = () => this.calculateOhm();
+
+            // Resistor Colors
+            const bandSelects = ['res-band-1', 'res-band-2', 'res-band-mul', 'res-band-tol'];
+            bandSelects.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.onchange = () => this.calculateResistor();
+            });
+
+            // Initially calculate res
+            this.calculateResistor();
+        },
+
+        toggle(show) {
+            if (show) UI.inputs.toolboxModal.classList.remove('hidden');
+            else UI.inputs.toolboxModal.classList.add('hidden');
+        },
+
+        calculateOhm() {
+            const v = parseFloat(document.getElementById('ohm-v').value);
+            const r = parseFloat(document.getElementById('ohm-r').value);
+            const i = parseFloat(document.getElementById('ohm-i').value);
+            const status = UI.inputs.ohmStatus;
+
+            if (!isNaN(v) && !isNaN(r) && isNaN(i)) {
+                document.getElementById('ohm-i').value = (v / r).toFixed(4);
+                status.textContent = "Corrente (I) calcolata.";
+            } else if (!isNaN(v) && isNaN(r) && !isNaN(i)) {
+                document.getElementById('ohm-r').value = (v / i).toFixed(2);
+                status.textContent = "Resistenza (R) calcolata.";
+            } else if (isNaN(v) && !isNaN(r) && !isNaN(i)) {
+                document.getElementById('ohm-v').value = (r * i).toFixed(2);
+                status.textContent = "Tensione (V) calcolata.";
+            } else {
+                status.textContent = "Inserisci esattamente 2 valori.";
+            }
+        },
+
+        calculateResistor() {
+            const b1 = parseInt(document.getElementById('res-band-1').value);
+            const b2 = parseInt(document.getElementById('res-band-2').value);
+            const mul = parseFloat(document.getElementById('res-band-mul').value);
+            const tol = document.getElementById('res-band-tol').value;
+
+            const val = (b1 * 10 + b2) * mul;
+            let displayVal = val >= 1000000 ? (val / 1000000).toFixed(2) + " MΩ" :
+                val >= 1000 ? (val / 1000).toFixed(2) + " kΩ" :
+                    val + " Ω";
+
+            document.getElementById('res-result').textContent = `Risultato: ${displayVal} ±${tol}%`;
+        }
+    };
+
+    // ==========================================
+    // 7. GESTIONE DATI E MEMORIA (Storage)
     // ==========================================
     const Storage = {
         save() {
@@ -1852,6 +2070,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 State.screenshotLayout = e.target.value;
                 Renderer.updateAll();
             };
+
+            // Project Management Handlers
+            UI.inputs.btnExport.onclick = () => ProjectManager.export();
+            UI.inputs.btnImport.onclick = () => UI.inputs.importUpload.click();
+            UI.inputs.importUpload.onchange = (e) => {
+                if (e.target.files.length > 0) ProjectManager.import(e.target.files[0]);
+                e.target.value = '';
+            };
+
+            // Toolbox Handlers
+            UI.inputs.btnToolbox.onclick = () => Toolbox.toggle(true);
+            UI.inputs.btnCloseToolbox.onclick = () => Toolbox.toggle(false);
+            UI.inputs.btnCloseToolboxBtn.onclick = () => Toolbox.toggle(false);
+            Toolbox.init();
 
             // PLC Import Handlers
             if (UI.inputs.importPlcBtn) {
