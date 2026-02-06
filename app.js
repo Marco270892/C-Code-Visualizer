@@ -1119,7 +1119,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         const segments = this.getWireSegments(selWire);
                         for (let i = 0; i < segments.length; i++) {
                             const p = segments[i];
-                            // Area di click aumentata a 15px per facilitare il touch
                             if (Math.abs(p.x - pos.x) < 15 && Math.abs(p.y - pos.y) < 15) {
                                 this.isDragging = true;
                                 this.dragType = 'wire-handle';
@@ -1131,11 +1130,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
 
-                // 2. PRIORITÀ COMPONENTI (Controllo dell'intera area del componente)
+                // 2. PRIORITÀ COMPONENTI (Hit-box accurata basata sulla rotazione)
                 const clickedComp = this.components.find(c => {
-                    // Calcolo hit-box basato sul tipo (standard 40x30 o simili)
-                    const halfW = 20, halfH = 15;
-                    return Math.abs(c.x - pos.x) < halfW && Math.abs(c.y - pos.y) < halfH;
+                    const dx = pos.x - c.x;
+                    const dy = pos.y - c.y;
+                    // Se ruotato di 90 o 270, scambiamo i limiti X/Y
+                    const isVert = (c.rotation / 90) % 2 !== 0;
+                    const bw = isVert ? 15 : 20;
+                    const bh = isVert ? 20 : 15;
+                    return Math.abs(dx) < bw && Math.abs(dy) < bh;
                 });
 
                 if (clickedComp) {
@@ -1146,6 +1149,25 @@ document.addEventListener('DOMContentLoaded', () => {
                     this.draw();
                     return;
                 }
+
+                // 3. SELEZIONE FILI
+                const clickedWire = this.wires.find(w => {
+                    const segments = this.getWireSegments(w);
+                    for (let i = 0; i < segments.length - 1; i++) {
+                        if (this.distToSegment(pos, segments[i], segments[i + 1]) < 8) return true;
+                    }
+                    return false;
+                });
+                if (clickedWire) {
+                    this.selectedId = clickedWire.id;
+                    this.dragType = 'wire';
+                    this.draw();
+                    return;
+                }
+
+                this.selectedId = null;
+                this.draw();
+                return;
             }
 
             // 2. SMART TERMINAL CHECK (PRIORITY PER I CAVI SE NON HO CLICCATO AL CENTRO)
@@ -1181,35 +1203,25 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
 
-            if (this.tool === 'select') {
-                // Click più largo se non abbiamo beccato terminali o centro esatto
-                const clickedComp = this.components.find(c => Math.abs(c.x - pos.x) < 20 && Math.abs(c.y - pos.y) < 20);
-                if (clickedComp) {
-                    this.selectedId = clickedComp.id;
-                    this.isDragging = true;
-                    this.dragStart = { x: pos.x - clickedComp.x, y: pos.y - clickedComp.y };
-                } else {
-                    // Check wires (check all segments)
-                    const clickedWire = this.wires.find(w => {
-                        const segments = this.getWireSegments(w);
-                        for (let i = 0; i < segments.length - 1; i++) {
-                            if (this.distToSegment(pos, segments[i], segments[i + 1]) < 8) return true;
-                        }
-                        return false;
-                    });
-                    this.selectedId = clickedWire ? clickedWire.id : null;
-                }
-                this.draw();
-            } else if (this.tool === 'wire') {
+            if (this.tool === 'wire') {
                 this.isDragging = true;
                 this.tempWire = { x1: this.snap(pos.x), y1: this.snap(pos.y), x2: this.snap(pos.x), y2: this.snap(pos.y) };
             } else {
-                // Place component
+                // Place component - Evita duplicati nella stessa posizione
+                const snapX = this.snap(pos.x);
+                const snapY = this.snap(pos.y);
+                const exists = this.components.find(c => c.x === snapX && c.y === snapY);
+                if (exists) {
+                    this.selectedId = exists.id;
+                    this.draw();
+                    return;
+                }
+
                 const newComp = {
                     id: Date.now(),
                     type: this.tool,
-                    x: this.snap(pos.x),
-                    y: this.snap(pos.y),
+                    x: snapX,
+                    y: snapY,
                     rotation: 0
                 };
                 if (this.tool === 'text') {
@@ -1228,8 +1240,13 @@ document.addEventListener('DOMContentLoaded', () => {
         onMouseMove(e) {
             const pos = this.getMousePos(e);
 
-            // Hover detection per componenti e fili
-            const hoveredComp = this.components.find(c => Math.abs(c.x - pos.x) < 25 && Math.abs(c.y - pos.y) < 25);
+            // Hover detection per componenti (anch'essa rotation-aware)
+            const hoveredComp = this.components.find(c => {
+                const isVert = (c.rotation / 90) % 2 !== 0;
+                const bw = isVert ? 15 : 25;
+                const bh = isVert ? 25 : 15;
+                return Math.abs(c.x - pos.x) < bw && Math.abs(c.y - pos.y) < bh;
+            });
             const hoveredWire = hoveredComp ? null : this.wires.find(w => {
                 const segments = this.getWireSegments(w);
                 for (let i = 0; i < segments.length - 1; i++) {
