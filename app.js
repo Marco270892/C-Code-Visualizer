@@ -723,8 +723,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     UI.inputs.flowchart.value = data.flowchart || '';
 
                     State.files = data.files || [];
+                    if (State.files.length > 0) {
+                        State.activeFileId = State.files[0].id;
+                    }
+
                     State.screenshots = data.screenshots || [];
                     State.screenshotLayout = data.screenshotLayout || '2';
+                    if (UI.inputs.screenshotLayout) {
+                        UI.inputs.screenshotLayout.value = State.screenshotLayout;
+                    }
 
                     if (data.lab) {
                         UI.labInputs.objectives.value = data.lab.objectives || '';
@@ -736,9 +743,16 @@ document.addEventListener('DOMContentLoaded', () => {
                         UI.labInputs.conclusions.value = data.lab.conclusions || '';
                         State.charts = data.lab.charts || [];
 
-                        if (data.lab.circuit && window.CircuitEditor) {
-                            CircuitEditor.components = data.lab.circuit.components || [];
-                            CircuitEditor.wires = data.lab.circuit.wires || [];
+                        // Restore Circuit Data with fallback checks
+                        if (window.CircuitEditor) {
+                            if (data.lab.circuit) {
+                                CircuitEditor.components = data.lab.circuit.components || [];
+                                CircuitEditor.wires = data.lab.circuit.wires || [];
+                                console.log("Imported circuit data:", CircuitEditor.components.length, "components,", CircuitEditor.wires.length, "wires.");
+                            } else {
+                                CircuitEditor.components = [];
+                                CircuitEditor.wires = [];
+                            }
                         }
                     }
 
@@ -747,13 +761,19 @@ document.addEventListener('DOMContentLoaded', () => {
                         UI.plcInputs.env.value = data.plc.env || '';
                     }
 
-                    // Switch to the project mode
-                    Events.switchMode(data.mode || 'code');
+                    // Switch to the project mode (don't load from storage, we just set the state)
+                    Events.switchMode(data.mode || 'code', false);
 
-                    // Refresh UI
+                    // Refresh UI Components
                     FileManager.init();
                     ScreenshotManager.renderList();
+
+                    // Force a redraw of the circuit and preview
+                    if (window.CircuitEditor) {
+                        CircuitEditor.draw();
+                    }
                     Renderer.updateAll();
+
                     alert("Progetto importato con successo!");
                 } catch (err) {
                     console.error(err);
@@ -2321,12 +2341,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
             UI.btns.download.forEach(btn => {
                 if (btn) {
-                    btn.onclick = () => {
-                        // Usiamo la stampa del browser per avere il testo selezionabile
-                        window.print();
-                    };
+                    btn.onclick = () => this.generatePDF();
                 }
             });
+
+            const printBtn = document.getElementById('print-btn-top');
+            if (printBtn) {
+                printBtn.onclick = () => window.print();
+            }
 
             // Info Modal
             UI.btns.info.onclick = () => this.toggleModal(true);
@@ -2354,7 +2376,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         },
 
-        switchMode(mode) {
+        switchMode(mode, loadFromStorage = true) {
             State.mode = mode;
             UI.screens.home.classList.add('hidden');
             UI.screens.app.classList.remove('hidden');
@@ -2386,7 +2408,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 UI.modes.editorSection.classList.remove('hidden');
             }
 
-            Storage.load(mode);
+            if (loadFromStorage) Storage.load(mode);
             this.renderChartInputs();
             Renderer.updateAll();
         },
@@ -2533,7 +2555,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.error("PDF Error:", e);
                 alert("Ops! Errore generazione PDF. Dettagli: " + e.message);
             } finally {
-                btns.forEach(b => { if (b) { b.disabled = false; b.textContent = "Scarica PDF"; } });
+                btns.forEach(b => {
+                    if (b) {
+                        b.disabled = false;
+                        b.innerHTML = b.dataset.originalHtml || b.innerHTML;
+                    }
+                });
             }
         }
     };
