@@ -526,6 +526,18 @@ code {
     background: rgba(255, 255, 255, 0.2);
 }
 
+.btn-accent {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: white;
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
+}
+
+.btn-accent:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 15px rgba(16, 185, 129, 0.3);
+    filter: brightness(1.1);
+}
+
 .btn-sm {
     padding: 0 1rem !important;
     font-size: 0.8rem !important;
@@ -1040,4 +1052,94 @@ code {
     border-radius: 4px;
     font-family: var(--font-mono);
     font-size: 0.8rem;
+}
+
+@media print {
+
+    /* Nascondi tutta l'interfaccia utente durante la stampa */
+    body {
+        background: white !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+
+    #home-screen,
+    #app-screen header,
+    .editor-side,
+    .section-header,
+    header,
+    .modal-overlay,
+    #toolbox-modal,
+    #back-to-home,
+    #info-btn,
+    .controls-mini {
+        display: none !important;
+    }
+
+    #app-screen {
+        display: block !important;
+        width: 100% !important;
+        max-width: none !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
+    .main-content {
+        display: block !important;
+        grid-template-columns: 1fr !important;
+    }
+
+    .preview-section {
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        width: 100% !important;
+    }
+
+    .preview-container {
+        display: block !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        background: white !important;
+        min-width: 0 !important;
+        width: 100% !important;
+        overflow: visible !important;
+    }
+
+    .pdf-page-mock {
+        width: 100% !important;
+        max-width: none !important;
+        margin: 0 !important;
+        padding: 20px !important;
+        box-shadow: none !important;
+        background: #1e293b !important;
+        color: white !important;
+        border-radius: 0 !important;
+        min-height: auto !important;
+        overflow: visible !important;
+    }
+
+    /* Forza il colore scuro dello sfondo anche in stampa */
+    .pdf-page-mock {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+
+    /* Assicura che il codice sia leggibile */
+    code,
+    pre {
+        white-space: pre-wrap !important;
+        word-wrap: break-word !important;
+    }
+
+    /* Interruzione di pagina intelligente */
+    .pdf-exercise-box,
+    .pdf-lab-section,
+    #pdf-code-container,
+    .pdf-main-title {
+        page-break-inside: avoid;
+        break-inside: avoid;
+    }
 }

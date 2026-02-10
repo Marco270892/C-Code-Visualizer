@@ -363,6 +363,178 @@ document.addEventListener('DOMContentLoaded', () => {
                 this.renderTabs();
                 Renderer.updateAll();
             }
+        },
+
+        autoComment() {
+            let code = State.editor ? State.editor.getValue() : UI.inputs.code.value;
+            if (!code.trim()) return;
+
+            const isPlc = State.mode === 'plc';
+            const lines = code.split('\n');
+            let newLines = [];
+
+            const firstLine = code.trim();
+            const startsWithComment = isPlc ?
+                (firstLine.startsWith('(*') || firstLine.startsWith('//')) :
+                (firstLine.startsWith('/*') || firstLine.startsWith('//'));
+
+            if (!startsWithComment) {
+                const title = UI.inputs.title.value || (isPlc ? "MODULO_LOGICO_DI_CONTROLLO" : "CORE_APPLICATION_MODULE");
+                const student = UI.inputs.student.value || "Lead Developer";
+                const date = UI.inputs.date.value || new Date().toLocaleDateString('it-IT');
+
+                if (isPlc) {
+                    newLines.push(`(*`);
+                    newLines.push(` * @project  ${title.toUpperCase()}`);
+                    newLines.push(` * @version  1.0`);
+                    newLines.push(` * @author   ${student}`);
+                    newLines.push(` * @date     ${date}`);
+                    newLines.push(` * @notice   Infrastruttura logica SCL per automazione industriale.`);
+                    newLines.push(` *)`);
+                } else {
+                    newLines.push(`/**`);
+                    newLines.push(` * @project  ${title.toUpperCase()}`);
+                    newLines.push(` * @author   ${student}`);
+                    newLines.push(` * @date     ${date}`);
+                    newLines.push(` * @brief    Implementazione delle routine critiche e gestione della logica applicativa.`);
+                    newLines.push(` * @details  Il codice segue gli standard di sicurezza e ottimizzazione delle risorse.`);
+                    newLines.push(` */`);
+                }
+                newLines.push(``);
+            }
+
+            for (let i = 0; i < lines.length; i++) {
+                let line = lines[i];
+                let trimmed = line.trim();
+                let lowerTrimmed = trimmed.toLowerCase();
+                let indent = line.substring(0, line.indexOf(trimmed));
+
+                let hasComment = trimmed.includes('//') || trimmed.includes('/*') || trimmed.includes('(*');
+                if (!trimmed || trimmed === '{' || trimmed === '}' || trimmed === 'BEGIN' ||
+                    trimmed.startsWith('END_') || trimmed === 'ELSE') {
+                    newLines.push(line);
+                    continue;
+                }
+
+                if (!hasComment) {
+                    if (isPlc) {
+                        // ADVANCED SCL/ST Contextual Patterns
+                        if (lowerTrimmed.startsWith('if ')) {
+                            newLines.push(`${indent}// Valutazione delle condizioni di interblocco o transizione stato`);
+                        } else if (lowerTrimmed.startsWith('elsif ')) {
+                            newLines.push(`${indent}// Sequenziamento di condizioni alternative prioritarie`);
+                        } else if (lowerTrimmed.startsWith('for ')) {
+                            newLines.push(`${indent}// Algoritmo di scansione vettoriale per elaborazione dati array`);
+                        } else if (lowerTrimmed.startsWith('case ')) {
+                            newLines.push(`${indent}// Selettore di stato per implementazione Macchina Funzionale (FSM)`);
+                        } else if (trimmed.includes('(IN:=') || trimmed.includes('.PT:=')) {
+                            newLines.push(`${indent}// Parametrizzazione e istanziazione di blocchi temporizzatori (Timer)`);
+                        } else if (trimmed.includes('CU:=') || trimmed.includes('CD:=')) {
+                            newLines.push(`${indent}// Configurazione dei parametri di conteggio per unità incrementali/decrementali`);
+                        } else if (trimmed.includes('#') && trimmed.includes(':=')) {
+                            newLines.push(`${indent}// Aggiornamento dei registri locali o variabili di interfaccia hardware`);
+                        } else if (lowerTrimmed.startsWith('region')) {
+                            newLines.push(`${indent}// Definizione di un'area logica protetta per l'organizzazione modulare`);
+                        } else if (lowerTrimmed.includes('return') || lowerTrimmed.includes('exit')) {
+                            newLines.push(`${indent}// Interruzione forzata del thread di esecuzione corrente`);
+                        }
+                    } else {
+                        // ADVANCED C Contextual Patterns
+                        if (trimmed.startsWith('#include ')) {
+                            newLines.push(`${indent}// Integrazione di dipendenze esterne: caricamento dei descrittori di sistema`);
+                        } else if (trimmed.startsWith('#define ')) {
+                            newLines.push(`${indent}// Definizione di macro costanti per l'ottimizzazione del preprocessore`);
+                        } else if (trimmed.includes('int main')) {
+                            newLines.push(`${indent}// Punto di ingresso del kernel applicativo e setup ambientale`);
+                        }
+                        // Logic per Pointer/Memory
+                        else if (trimmed.includes('malloc(')) {
+                            newLines.push(`${indent}// Allocazione dinamica dello spazio di indirizzamento nell'area Heap`);
+                        } else if (trimmed.includes('free(')) {
+                            newLines.push(`${indent}// Deallocazione della memoria per prevenire fenomeni di Memory Leak`);
+                        } else if (trimmed.includes('*') && (trimmed.startsWith('int') || trimmed.startsWith('char') || trimmed.startsWith('void'))) {
+                            newLines.push(`${indent}// Dichiarazione di puntatori per la gestione diretta del riferimento di memoria`);
+                        }
+                        // Logic per I/O e Files
+                        else if (trimmed.includes('printf(')) {
+                            if (trimmed.includes('?') || trimmed.includes('...') || trimmed.toLowerCase().includes('inserisci'))
+                                newLines.push(`${indent}// Richiesta di interazione verso l'utente (User Input Prompt)`);
+                            else
+                                newLines.push(`${indent}// Rendering dei dati elaborati sullo stream di output standard`);
+                        } else if (trimmed.includes('scanf(')) {
+                            newLines.push(`${indent}// Parsing del buffer di input e memorizzazione negli indirizzi di destinazione`);
+                        } else if (trimmed.includes('fopen(')) {
+                            newLines.push(`${indent}// Apertura di un handle verso lo storage persistente (File System Access)`);
+                        }
+                        // Logic per Control Flow
+                        else if (trimmed.startsWith('for')) {
+                            newLines.push(`${indent}// Processo di iterazione ciclica per la manipolazione di strutture dati`);
+                        } else if (trimmed.startsWith('if')) {
+                            newLines.push(`${indent}// Ramificazione logica basata sulla valutazione di predicati booleani`);
+                        } else if (trimmed.startsWith('struct ')) {
+                            newLines.push(`${indent}// Definizione di una struttura dati complessa per l'incapsulamento informativo`);
+                        } else if (trimmed.includes('return 0;')) {
+                            newLines.push(`${indent}// Chiusura del processo con restituzione dello stato di integrità al SO`);
+                        } else if (trimmed.startsWith('int ') || trimmed.startsWith('float ') || trimmed.startsWith('double ')) {
+                            if (!trimmed.includes('('))
+                                newLines.push(`${indent}// Inizializzazione dei registri di memoria per variabili locali`);
+                        }
+                    }
+                }
+
+                newLines.push(line);
+            }
+
+            const finalCode = newLines.join('\n');
+            if (State.editor) State.editor.setValue(finalCode);
+            else UI.inputs.code.value = finalCode;
+
+            this.updateCurrentContent(finalCode);
+            Renderer.updateAll();
+
+            const btn = document.getElementById('auto-comment-btn');
+            if (btn) {
+                const originalText = btn.innerHTML;
+                btn.innerHTML = '💎 Alta Precisione Attiva!';
+                setTimeout(() => { btn.innerHTML = originalText; }, 2000);
+            }
+        },
+
+        removeComments() {
+            let code = State.editor ? State.editor.getValue() : UI.inputs.code.value;
+            if (!code.trim()) return;
+
+            let finalCode = '';
+            const isPlc = State.mode === 'plc';
+
+            if (isPlc) {
+                // Rimuove commenti SCL: (* *) e //
+                // Nota: Regex per (* *) deve gestire il multi-linea
+                finalCode = code.replace(/\(\*[\s\S]*?\*\)/g, '');
+                finalCode = finalCode.replace(/\/\/.*/g, '');
+            } else {
+                // Rimuove commenti C: /* */ e //
+                finalCode = code.replace(/\/\*[\s\S]*?\*\//g, '');
+                finalCode = finalCode.replace(/\/\/.*/g, '');
+            }
+
+            // Pulizia linee vuote eccessive lasciate dai commenti
+            finalCode = finalCode.split('\n').filter(line => line.trim() !== '' || line === '').join('\n');
+            // Rimuove blocchi di più di 2 newline consecutive
+            finalCode = finalCode.replace(/\n{3,}/g, '\n\n');
+
+            if (State.editor) State.editor.setValue(finalCode);
+            else UI.inputs.code.value = finalCode;
+
+            this.updateCurrentContent(finalCode);
+            Renderer.updateAll();
+
+            const btn = document.getElementById('remove-comments-btn');
+            if (btn) {
+                const originalText = btn.innerHTML;
+                btn.innerHTML = '🗑️ Commenti Rimossi!';
+                setTimeout(() => { btn.innerHTML = originalText; }, 2000);
+            }
         }
     };
 
@@ -2100,6 +2272,14 @@ document.addEventListener('DOMContentLoaded', () => {
             };
 
             UI.inputs.addFileBtn.onclick = () => FileManager.addFile();
+            const autoCommentBtn = document.getElementById('auto-comment-btn');
+            if (autoCommentBtn) {
+                autoCommentBtn.onclick = () => FileManager.autoComment();
+            }
+            const removeCommentsBtn = document.getElementById('remove-comments-btn');
+            if (removeCommentsBtn) {
+                removeCommentsBtn.onclick = () => FileManager.removeComments();
+            }
             UI.inputs.screenshotUpload.onchange = (e) => ScreenshotManager.add(e.target.files);
             UI.inputs.screenshotLayout.onchange = (e) => {
                 State.screenshotLayout = e.target.value;
@@ -2140,7 +2320,12 @@ document.addEventListener('DOMContentLoaded', () => {
             };
 
             UI.btns.download.forEach(btn => {
-                if (btn) btn.onclick = () => this.generatePDF();
+                if (btn) {
+                    btn.onclick = () => {
+                        // Usiamo la stampa del browser per avere il testo selezionabile
+                        window.print();
+                    };
+                }
             });
 
             // Info Modal
