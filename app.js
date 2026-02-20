@@ -671,7 +671,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             };
 
-            const fileName = `${UI.inputs.title.value.replace(/ /g, '_')}_progetto.lab`;
+            const fileName = `${UI.inputs.title.value}_progetto.lab`;
             const jsonText = JSON.stringify(data, null, 2);
 
             // Attempt to use the modern File System Access API (Save As dialog)
@@ -2524,7 +2524,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const pdf = new jsPDF({ unit: 'pt', format: [pdfWidth, pdfHeight] });
 
                 pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-                const fileName = `${title.toLowerCase().replace(/ /g, '_')}.pdf`;
+                const fileName = `${title}.pdf`;
 
                 // Attempt to use the modern File System Access API (Save As dialog)
                 if ('showSaveFilePicker' in window) {
