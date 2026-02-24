@@ -2341,9 +2341,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
             UI.btns.download.forEach(btn => {
                 if (btn) {
-                    btn.onclick = () => this.generatePDF();
+                    btn.onclick = () => AIReviewer.startReview();
                 }
             });
+
+            // AI Modal Handlers
+            document.getElementById('close-ai-modal').onclick = () => AIReviewer.toggleModal(false);
+            document.getElementById('ai-fix-btn').onclick = () => AIReviewer.toggleModal(false);
+            document.getElementById('ai-continue-btn').onclick = () => {
+                AIReviewer.toggleModal(false);
+                this.generatePDF(); // Trigger direct generation
+            };
 
             const printBtn = document.getElementById('print-btn-top');
             if (printBtn) {
@@ -2562,6 +2570,188 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 });
             }
+        }
+    };
+
+    // ==========================================
+    // 8. AI REVIEWER (Logica di verifica professionale)
+    // ==========================================
+    const AIReviewer = {
+        async startReview() {
+            this.toggleModal(true);
+            document.getElementById('ai-loading').classList.remove('hidden');
+            document.getElementById('ai-results').classList.add('hidden');
+
+            // Simula un'analisi IA con un delay realistico
+            await new Promise(r => setTimeout(r, 1500));
+
+            const analysis = this.analyze();
+            this.showResults(analysis);
+        },
+
+        toggleModal(show) {
+            const modal = document.getElementById('ai-modal');
+            if (show) {
+                modal.classList.remove('hidden');
+                document.body.style.overflow = 'hidden';
+            } else {
+                modal.classList.add('hidden');
+                document.body.style.overflow = '';
+            }
+        },
+
+        analyze() {
+            let score = 100;
+            const suggestions = [];
+
+            // 1. Verifica Titolo
+            const title = UI.inputs.title.value.trim();
+            if (!title || title.toLowerCase() === 'codice sorgente c' || title.toLowerCase() === 'documento') {
+                score -= 15;
+                suggestions.push({
+                    type: 'error',
+                    title: 'Titolo Generico',
+                    text: 'Usa un titolo più specifico per identificare il progetto (es. "Semaforo con Arduino" invece di "Documento").'
+                });
+            }
+
+            // 2. Verifica Dati Studente
+            if (!UI.inputs.student.value.trim()) {
+                score -= 10;
+                suggestions.push({
+                    type: 'warning',
+                    title: 'Dettagli Studente Mancanti',
+                    text: 'Aggiungere nome e classe nell\'intestazione è fondamentale per la consegna.'
+                });
+            }
+
+            // 3. Verifica Logo
+            if (!State.logoBase64) {
+                score -= 5;
+                suggestions.push({
+                    type: 'warning',
+                    title: 'Senza Identità Visiva',
+                    text: 'Un logo professionale (scuola o azienda) migliora l\'impatto visivo del documento.'
+                });
+            }
+
+            // 4. Analisi Contenuto in base alla modalità
+            if (State.mode === 'lab') {
+                const desc = UI.labInputs.description.value.trim();
+                const materials = UI.labInputs.materials.value.trim();
+
+                if (desc.length < 50) {
+                    score -= 20;
+                    suggestions.push({
+                        type: 'error',
+                        title: 'Descrizione Attività Insufficente',
+                        text: 'Il procedimento dovrebbe descrivere nel dettaglio i passaggi svolti, non solo una riga.'
+                    });
+                }
+                if (!materials) {
+                    score -= 10;
+                    suggestions.push({
+                        type: 'warning',
+                        title: 'Elenco Materiali Vuoto',
+                        text: 'Dichiarare i componenti usati è essenziale in una relazione tecnica.'
+                    });
+                }
+                if (window.CircuitEditor && CircuitEditor.components.length === 0) {
+                    score -= 5;
+                    suggestions.push({
+                        type: 'warning',
+                        title: 'Schema Elettrico Assente',
+                        text: 'Hai dimenticato di inserire uno schema? Usa il Circuit Editor per arricchire la relazione.'
+                    });
+                }
+            } else if (State.mode === 'code' || State.mode === 'plc') {
+                const code = State.editor ? State.editor.getValue() : UI.inputs.code.value;
+                if (!code.includes('//') && !code.includes('/*') && !code.includes('(*')) {
+                    score -= 15;
+                    suggestions.push({
+                        type: 'warning',
+                        title: 'Commenti Assenti',
+                        text: 'Un codice professionale deve essere commentato. Clicca su "Commenta Codice" per assistenza.'
+                    });
+                }
+                if (code.length < 100) {
+                    score -= 10;
+                    suggestions.push({
+                        type: 'warning',
+                        title: 'Codice molto ridotto',
+                        text: 'Verifica di aver caricato tutto il sorgente necessario.'
+                    });
+                }
+            }
+
+            // 5. Screenshot
+            if (State.screenshots.length === 0 && State.mode !== 'flowchart') {
+                score -= 10;
+                suggestions.push({
+                    type: 'warning',
+                    title: 'Nessuna Prova Funzionale',
+                    text: 'Gli screenshot dei risultati sono la prova che il lavoro è stato testato correttamente.'
+                });
+            }
+
+            // Stato finale
+            let status = 'ECCELLENTE';
+            let color = '#10b981';
+            let bg = 'rgba(16, 185, 129, 0.2)';
+
+            if (score <= 50) {
+                status = 'DA RIFARE';
+                color = '#ef4444';
+                bg = 'rgba(239, 68, 68, 0.2)';
+            } else if (score <= 80) {
+                status = 'DA MIGLIORARE';
+                color = '#f59e0b';
+                bg = 'rgba(245, 158, 11, 0.2)';
+            }
+
+            if (suggestions.length === 0) {
+                suggestions.push({
+                    type: 'success',
+                    title: 'Lavoro Perfetto',
+                    text: 'L\'IA non ha trovato errori formali. La tua documentazione è di alto livello.'
+                });
+            }
+
+            return { score, status, color, bg, suggestions };
+        },
+
+        showResults(res) {
+            document.getElementById('ai-loading').classList.add('hidden');
+            const results = document.getElementById('ai-results');
+            results.classList.remove('hidden');
+
+            document.getElementById('ai-score-value').textContent = `${res.score}/100`;
+            const badge = document.getElementById('ai-status-badge');
+            badge.textContent = res.status;
+            badge.style.color = res.color;
+            badge.style.backgroundColor = res.bg;
+
+            const container = document.getElementById('ai-suggestions');
+            container.innerHTML = '';
+
+            res.suggestions.forEach(s => {
+                const div = document.createElement('div');
+                div.className = `ai-suggestion-item ${s.type}`;
+
+                let icon = '🔔';
+                if (s.type === 'error') icon = '❌';
+                else if (s.type === 'warning') icon = '⚠️';
+                else if (s.type === 'success') icon = '✅';
+
+                div.innerHTML = `
+                    <div class="ai-icon-box" style="background:${res.bg}; color:${res.color};">${icon}</div>
+                    <div class="ai-suggestion-content">
+                        <h5>${s.title}</h5>
+                        <p>${s.text}</p>
+                    </div>
+                `;
+                container.appendChild(div);
+            });
         }
     };
 

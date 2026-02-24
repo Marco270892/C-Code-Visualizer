@@ -836,6 +836,58 @@ cond(no)->op1" spellcheck="false" class="code-editor-area"
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/clike/clike.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/addon/edit/closebrackets.min.js"></script>
 
+    <!-- AI Reviewer Modal -->
+    <div id="ai-modal" class="modal-overlay hidden">
+        <div class="modal-content"
+            style="max-width: 650px; border: 2px solid var(--accent-color); box-shadow: 0 0 30px var(--accent-glow);">
+            <div class="modal-header" style="background: rgba(56, 189, 248, 0.1);">
+                <h2 style="display: flex; align-items: center; gap: 10px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                        style="color: var(--accent-color);">
+                        <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8z"></path>
+                        <path d="M12 6v6l4 2"></path>
+                    </svg>
+                    AI Content Reviewer
+                </h2>
+                <button id="close-ai-modal" class="btn-close">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 2rem;">
+                <div id="ai-loading" class="text-center">
+                    <div class="spinner"></div>
+                    <p style="margin-top: 1rem; color: var(--text-secondary);">Analisi in corso per la massima qualità
+                        professionale...</p>
+                </div>
+                <div id="ai-results" class="hidden">
+                    <div class="ai-score-container"
+                        style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; padding: 1rem; background: rgba(15, 23, 42, 0.5); border-radius: 0.8rem; border: 1px solid var(--border-color);">
+                        <div>
+                            <span style="font-size: 0.9rem; color: var(--text-secondary);">Indice di
+                                Professionalità:</span>
+                            <div id="ai-score-value"
+                                style="font-size: 2.5rem; font-weight: 800; color: var(--accent-color);">85/100</div>
+                        </div>
+                        <div id="ai-status-badge"
+                            style="padding: 0.5rem 1rem; border-radius: 2rem; font-size: 0.8rem; font-weight: 700; background: rgba(56, 189, 248, 0.2); color: var(--accent-color);">
+                            BUONO</div>
+                    </div>
+
+                    <h4
+                        style="margin-bottom: 1rem; font-size: 0.9rem; text-transform: uppercase; color: var(--text-secondary);">
+                        Suggerimenti dell'IA:</h4>
+                    <div id="ai-suggestions">
+                        <!-- Suggestions will be injected here -->
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer"
+                style="display: flex; gap: 10px; justify-content: flex-end; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+                <button id="ai-fix-btn" class="btn btn-secondary btn-sm">Modifica ancora</button>
+                <button id="ai-continue-btn" class="btn btn-primary btn-sm">Ignora e Scarica PDF</button>
+            </div>
+        </div>
+    </div>
+
     <script src="app.js?v=2.1"></script>
 </body>
 
