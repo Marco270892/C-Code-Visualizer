@@ -2518,6 +2518,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 window.scrollTo(0, 0);
 
+                // SICUREZZA: Verifica che tutti i canvas nel mock abbiano dimensioni valide > 0
+                // Errore creato da html2canvas v1.4.1 se trova canvas a 0x0
+                element.querySelectorAll('canvas').forEach(canv => {
+                    if (canv.width === 0) canv.width = 300;
+                    if (canv.height === 0) canv.height = 150;
+                });
+
                 const canvas = await html2canvas(element, {
                     scale: 2,
                     backgroundColor: '#1e293b',
