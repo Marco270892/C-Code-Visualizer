@@ -1366,6 +1366,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 box.className = 'chart-box';
                 const canvas = document.createElement('canvas');
                 canvas.id = `chart-${chart.id}`;
+                // Garantiamo dimensioni iniziali > 0 per evitare errori in html2canvas
+                canvas.width = 600;
+                canvas.height = 300;
                 box.appendChild(canvas);
                 section.appendChild(box);
 
@@ -2520,8 +2523,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     backgroundColor: '#1e293b',
                     useCORS: true,
                     logging: false,
-                    allowTaint: true, // Sometimes needed for mermaid/images
-                    scrollY: -window.scrollY
+                    allowTaint: false, // Disabilitato per evitare problemi di sicurezza/canvas
+                    scrollY: -window.scrollY,
+                    windowWidth: document.documentElement.offsetWidth,
+                    windowHeight: document.documentElement.offsetHeight
                 });
 
                 const imgData = canvas.toDataURL('image/png');

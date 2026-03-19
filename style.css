@@ -858,6 +858,8 @@ code {
     flex: 1;
     height: 1px;
     background: linear-gradient(to right, rgba(56, 189, 248, 0.3), transparent);
+    min-width: 10px; /* Previene larghezza 0 che causa errori in html2canvas */
+    flex-shrink: 0;   /* Forza la larghezza minima */
 }
 
 #pdf-lab-objectives-display,
