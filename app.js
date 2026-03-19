@@ -2516,6 +2516,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Attendi un attimo extra per la stabilità grafica
                 await new Promise(r => setTimeout(r, 1000));
 
+                // NUOVO: Attendi che tutte le immagini nel mock (logo, screenshot) siano caricate
+                const images = element.querySelectorAll('img');
+                const imagePromises = Array.from(images).map(img => {
+                    if (img.complete) return Promise.resolve();
+                    return new Promise(resolve => {
+                        img.onload = img.onerror = resolve;
+                    });
+                });
+                await Promise.all(imagePromises);
+
                 window.scrollTo(0, 0);
 
                 // SICUREZZA: Verifica che tutti i canvas nel mock abbiano dimensioni valide > 0
