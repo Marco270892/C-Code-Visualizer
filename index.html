@@ -67,7 +67,7 @@
             <h1>Select Your Task</h1>
             <p class="subtitle">Scegli il tipo di documento che vuoi creare oggi</p>
             <div class="version-badge" style="margin-top: 15px; display: inline-block; padding: 4px 12px; background: rgba(56, 189, 248, 0.1); border: 1px solid var(--accent-color); color: var(--accent-color); border-radius: 20px; font-size: 0.75rem; font-weight: 600;">
-                Version 2.7.0 - (Latest Build: 22/03/2026)
+                Version 2.7.1 - (Latest Build: 22/03/2026)
             </div>
         </header>
 
@@ -828,9 +828,9 @@ cond(no)->op1" spellcheck="false" class="code-editor-area"
     <!-- Flowchart.js (requires Raphael) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/raphael/2.3.0/raphael.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/flowchart/1.17.1/flowchart.min.js"></script>
-    <!-- jsPDF & html2canvas -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <!-- jsPDF & html2canvas (Uso versioni locali per massima stabilità su GitHub) -->
+    <script src="lib/jspdf.umd.min.js"></script>
+    <script src="lib/html2canvas.min.js"></script>
 
     <!-- CodeMirror 5 Main JS -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.js"></script>
@@ -889,7 +889,7 @@ cond(no)->op1" spellcheck="false" class="code-editor-area"
         </div>
     </div>
 
-    <script src="app.js?v=2.7.0"></script>
+    <script src="app.js?v=2.7.1"></script>
 </body>
 
 </html>

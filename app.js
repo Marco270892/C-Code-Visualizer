@@ -2579,9 +2579,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Posiziona la vista all'inizio
                 window.scrollTo(0, 0);
 
-                // Catturiamo il DOM (ora privo di canvas attivi, solo immagini PNG stabili)
+                // Catturiamo il DOM (freeze&capture)
                 const canvas = await html2canvas(element, {
-                    scale: 2,
+                    scale: 1.5, // Leggermente diminuito per stabilità su GitHub
                     backgroundColor: '#1e293b',
                     useCORS: true,
                     logging: false,
@@ -2592,7 +2592,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     height: element.offsetHeight,
                     x: 0,
                     y: 0,
-                    // ISTRUZIONE CRITICA: Ignora TUTTI i canvas per evitare l'errore "createPattern"
+                    // ISTRUZIONE CRITICA: Disabilita foreignObjectRendering per evitare bug con le formule MathJax
+                    foreignObjectRendering: false,
+                    // ISTRUZIONE CRITICA: Ignora TUTTI i canvas (scansioniamo il clone per essere sicuri)
                     ignoreElements: (el) => {
                         return el.tagName === 'CANVAS';
                     },
@@ -2602,6 +2604,8 @@ document.addEventListener('DOMContentLoaded', () => {
                             mock.style.transform = 'none';
                             mock.style.margin = '0';
                             mock.style.position = 'relative';
+                            // Rimuovi eventuali SVG di MathJax che potrebbero causare crash se troppo complessi?
+                            // No, li lasciamo ma forziamo la visibilità.
                         }
                     }
                 });
