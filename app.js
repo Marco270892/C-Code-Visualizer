@@ -2580,18 +2580,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 window.scrollTo(0, 0);
 
                 // Catturiamo il DOM (freeze&capture)
+                // Usiamo opzioni specifiche per GitHub Pages (HTTPS/CORS)
                 const canvas = await html2canvas(element, {
-                    scale: 2, // Ripristinato per qualità (Deep Clean lo rende sicuro)
+                    scale: 2,
                     backgroundColor: '#1e293b',
                     useCORS: true,
-                    logging: true, // Vedere i dettagli in console se serve ancora
                     allowTaint: false,
+                    logging: false,
                     scrollX: 0,
                     scrollY: 0,
                     width: element.offsetWidth,
                     height: element.offsetHeight,
                     x: 0,
                     y: 0,
+                    removeContainer: true, // Pulisce il DOM temporaneo creato dalla libreria
                     foreignObjectRendering: false,
                     onclone: (clonedDoc) => {
                         const mock = clonedDoc.querySelector('.pdf-page-mock');
@@ -2600,11 +2602,10 @@ document.addEventListener('DOMContentLoaded', () => {
                             mock.style.margin = '0';
                             mock.style.position = 'relative';
 
-                            // PULIZIA PROFONDA: Rimuovi QUALSIASI canvas rimasto o SVG vuoto per sicurezza
+                            // PULIZIA PROFONDA: Rimuovi QUALSIASI canvas rimasto o SVG anomalo
                             clonedDoc.querySelectorAll('canvas').forEach(c => c.remove());
-                            // Rimuovi elementi MathJax che hanno larghezza 0
-                            clonedDoc.querySelectorAll('.MathJax_SVG').forEach(svg => {
-                                if (svg.offsetWidth === 0) svg.remove();
+                            clonedDoc.querySelectorAll('svg').forEach(svg => {
+                                if (svg.getBBox && svg.getBBox().width === 0) svg.remove();
                             });
                         }
                     }
