@@ -2592,6 +2592,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     height: element.offsetHeight,
                     x: 0,
                     y: 0,
+                    // ISTRUZIONE CRITICA: Ignora TUTTI i canvas per evitare l'errore "createPattern"
+                    ignoreElements: (el) => {
+                        return el.tagName === 'CANVAS';
+                    },
                     onclone: (clonedDoc) => {
                         const mock = clonedDoc.querySelector('.pdf-page-mock');
                         if (mock) {
