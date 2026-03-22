@@ -146,7 +146,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 clearTimeout(timeout);
                 timeout = setTimeout(() => func.apply(context, args), wait);
             };
+        },
+        logError(msg, err) {
+            console.error(msg, err);
+            const errorOverlay = document.createElement('div');
+            errorOverlay.style.cssText = 'position:fixed; top:20px; left:20px; right:20px; background:#ef4444; color:white; padding:15px; border-radius:8px; z-index:9999; box-shadow:0 10px 30px rgba(0,0,0,0.5); font-family:monospace; font-size:12px;';
+            errorOverlay.innerHTML = `<strong>⚠️ Errore di Sistema:</strong><br>${msg}<br><br><small>${err ? (err.message || err) : ''}</small><br><br><button onclick="this.parentElement.remove()" style="background:white; color:#ef4444; border:none; padding:5px 10px; border-radius:4px; cursor:pointer;">Chiudi</button>`;
+            document.body.appendChild(errorOverlay);
         }
+    };
+
+    // Global Error Handler for GitHub Debugging
+    window.onerror = function(message, source, lineno, colno, error) {
+        Utils.logError("Errore imprevisto rilevato: " + message, error);
+        return false;
     };
 
     // ==========================================
@@ -2493,11 +2506,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const btns = UI.btns.download;
 
             if (!window.html2canvas) {
-                alert("Errore Critico: La libreria 'html2canvas' non è stata caricata. Ricarica la pagina.");
+                Utils.logError("Libreria html2canvas non trovata. Verifica la connessione.");
                 return;
             }
             if (!window.jspdf) {
-                alert("Errore Critico: La libreria 'jspdf' non è stata caricata. Ricarica la pagina.");
+                Utils.logError("Libreria jsPDF non trovata. Verifica la connessione.");
                 return;
             }
 
@@ -2507,11 +2520,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Ensure everything is ready
                 await document.fonts.ready;
                 
+                // Final Redraw to ensure all components are in the right position
+                Renderer.updateAll();
+
                 // Extra time for Chart.js and MathJax animations to settle
-                await new Promise(r => setTimeout(r, 1200));
+                await new Promise(r => setTimeout(r, 1500));
 
                 const title = prompt("Titolo file PDF:", UI.inputs.title.value) || "Documento";
                 const element = document.querySelector('.pdf-page-mock');
+                
+                if (!element) throw new Error("Anteprima PDF non trovata nel DOM.");
 
                 // Forza MathJax v2 a finire il rendering se presente
                 if (window.MathJax && window.MathJax.Hub) {
@@ -2521,16 +2539,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 // Verify and fix canvas dimensions within the mock
-                element.querySelectorAll('canvas').forEach(canv => {
-                    const style = window.getComputedStyle(canv);
-                    const drawWidth = parseInt(style.width) || canv.width || 600;
-                    const drawHeight = parseInt(style.height) || canv.height || 300;
-                    
-                    if (canv.width === 0 || isNaN(canv.width)) canv.width = drawWidth;
-                    if (canv.height === 0 || isNaN(canv.height)) canv.height = drawHeight;
+                // This is a CRITICAL fix for the 0x0 canvas error
+                const canvases = element.querySelectorAll('canvas');
+                canvases.forEach(canv => {
+                    if (canv.width === 0 || canv.height === 0) {
+                        console.warn("Rilevato canvas a 0px, forzo dimensioni.", canv);
+                        canv.width = 600;
+                        canv.height = 300;
+                    }
                 });
 
-                // Wait for all images in the mock (logo, screenshots) to be fully loaded
+                // Wait for all images in the mock to be fully loaded
                 const images = element.querySelectorAll('img');
                 await Promise.all(Array.from(images).map(img => {
                     if (img.complete) return Promise.resolve();
@@ -2539,38 +2558,42 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
                 }));
 
-                // Ensure the view is stable
+                // Ensure the view is stable at the top
                 window.scrollTo(0, 0);
 
-                // Use robust html2canvas options
+                // Start capture
                 const canvas = await html2canvas(element, {
                     scale: 2,
                     backgroundColor: '#1e293b',
                     useCORS: true,
-                    logging: false,
+                    logging: true, // Enabled for debugging
                     allowTaint: false,
                     scrollX: 0,
                     scrollY: 0,
                     width: element.offsetWidth,
                     height: element.offsetHeight,
+                    x: 0,
+                    y: 0,
                     onclone: (clonedDoc) => {
-                        // Ensure the cloned element is visible and stable for rendering
-                        const clonedElement = clonedDoc.querySelector('.pdf-page-mock');
-                        if (clonedElement) {
-                            clonedElement.style.transform = 'none';
-                            clonedElement.style.margin = '0';
+                        const mock = clonedDoc.querySelector('.pdf-page-mock');
+                        if (mock) {
+                            mock.style.transform = 'none';
+                            mock.style.margin = '0';
+                            mock.style.position = 'relative';
+                            mock.style.top = '0';
+                            mock.style.left = '0';
                         }
                     }
                 });
 
                 if (!canvas || canvas.width === 0 || canvas.height === 0) {
-                    throw new Error("Errore nel rendering: il canvas generato è vuoto.");
+                    throw new Error("Errore nel rendering: il canvas generato è vuoto o ha dimensioni nulle.");
                 }
 
-                const imgData = canvas.toDataURL('image/png');
+                const imgData = canvas.toDataURL('image/png', 1.0);
                 const { jsPDF } = window.jspdf;
 
-                // PDF Setup: A4 format at 72dpi is 595x842pt
+                // PDF Setup: A4 format
                 const pdfWidth = 595.28;
                 const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
                 const pdf = new jsPDF({ 
@@ -2582,32 +2605,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight, undefined, 'FAST');
                 const fileName = `${title}.pdf`;
 
-                // Modern Save Picker
-                if ('showSaveFilePicker' in window && window.isSecureContext) {
-                    try {
-                        const handle = await window.showSaveFilePicker({
-                            suggestedName: fileName,
-                            types: [{
-                                description: 'Documento PDF',
-                                accept: { 'application/pdf': ['.pdf'] },
-                            }],
-                        });
-                        const writable = await handle.createWritable();
-                        const pdfBlob = pdf.output('blob');
-                        await writable.write(pdfBlob);
-                        await writable.close();
-                        return; // Done
-                    } catch (err) {
-                        if (err.name === 'AbortError') return;
-                        console.warn("Picker failed, using fallback.", err);
-                    }
-                }
-
-                // Standard Fallback
+                // Standard Save (More reliable on some GitHub Pages setups than the Picker API)
                 pdf.save(fileName);
+                
             } catch (e) {
-                console.error("PDF Export Critical Error:", e);
-                alert("Errore durante l'esportazione PDF: " + e.message + "\n\nSuggerimento: prova a ricaricare la pagina o a ridurre la dimensione degli screenshot.");
+                Utils.logError("Errore critico durante l'esportazione PDF", e);
             } finally {
                 btns.forEach(b => {
                     if (b) {
