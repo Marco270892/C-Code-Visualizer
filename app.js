@@ -2517,19 +2517,50 @@ document.addEventListener('DOMContentLoaded', () => {
             btns.forEach(b => { if (b) { b.disabled = true; b.textContent = "Generazione..."; } });
 
             try {
-                // Ensure everything is ready
+                // Sincronizza i dati e assicurati che tutto sia renderizzato
+                Renderer.updateAll();
                 await document.fonts.ready;
                 
-                // Final Redraw to ensure all components are in the right position
-                Renderer.updateAll();
-
-                // Extra time for Chart.js and MathJax animations to settle
+                // Attesa extra per garantire che Chart.js e MathJax abbiano finito le animazioni
                 await new Promise(r => setTimeout(r, 1500));
 
                 const title = prompt("Titolo file PDF:", UI.inputs.title.value) || "Documento";
                 const element = document.querySelector('.pdf-page-mock');
                 
                 if (!element) throw new Error("Anteprima PDF non trovata nel DOM.");
+
+                // --- TECNICA "FREEZE & CAPTURE" ---
+                // Convertiamo tutti i canvas in immagini statiche temporanee per evitare l'errore "canvas with width 0"
+                const tempImages = [];
+                const canvases = element.querySelectorAll('canvas');
+                
+                canvases.forEach(canv => {
+                    const drawWidth = canv.offsetWidth || canv.width || 600;
+                    const drawHeight = canv.offsetHeight || canv.height || 300;
+                    
+                    if (canv.width === 0 || canv.height === 0) {
+                        canv.width = drawWidth;
+                        canv.height = drawHeight;
+                    }
+
+                    try {
+                        const dataUrl = canv.toDataURL('image/png');
+                        const img = document.createElement('img');
+                        img.src = dataUrl;
+                        img.className = "temp-pdf-img";
+                        img.style.width = drawWidth + "px";
+                        img.style.height = drawHeight + "px";
+                        img.style.display = "block";
+                        img.style.margin = "0 auto";
+                        
+                        // Sostituiamo temporaneamente il canvas con l'immagine
+                        canv.style.display = "none";
+                        canv.parentNode.insertBefore(img, canv);
+                        tempImages.push({ img, canv });
+                    } catch (e) {
+                        console.warn("Impossibile convertire canvas in immagine, provo a procedere.", e);
+                    }
+                });
 
                 // Forza MathJax v2 a finire il rendering se presente
                 if (window.MathJax && window.MathJax.Hub) {
@@ -2538,35 +2569,22 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
                 }
 
-                // Verify and fix canvas dimensions within the mock
-                // This is a CRITICAL fix for the 0x0 canvas error
-                const canvases = element.querySelectorAll('canvas');
-                canvases.forEach(canv => {
-                    if (canv.width === 0 || canv.height === 0) {
-                        console.warn("Rilevato canvas a 0px, forzo dimensioni.", canv);
-                        canv.width = 600;
-                        canv.height = 300;
-                    }
-                });
-
-                // Wait for all images in the mock to be fully loaded
+                // Attendiamo che le nuove immagini temporanee e quelle esistenti siano pronte
                 const images = element.querySelectorAll('img');
                 await Promise.all(Array.from(images).map(img => {
                     if (img.complete) return Promise.resolve();
-                    return new Promise(resolve => {
-                        img.onload = img.onerror = resolve;
-                    });
+                    return new Promise(resolve => { img.onload = img.onerror = resolve; });
                 }));
 
-                // Ensure the view is stable at the top
+                // Posiziona la vista all'inizio
                 window.scrollTo(0, 0);
 
-                // Start capture
+                // Catturiamo il DOM (ora privo di canvas attivi, solo immagini PNG stabili)
                 const canvas = await html2canvas(element, {
                     scale: 2,
                     backgroundColor: '#1e293b',
                     useCORS: true,
-                    logging: true, // Enabled for debugging
+                    logging: false,
                     allowTaint: false,
                     scrollX: 0,
                     scrollY: 0,
@@ -2580,20 +2598,23 @@ document.addEventListener('DOMContentLoaded', () => {
                             mock.style.transform = 'none';
                             mock.style.margin = '0';
                             mock.style.position = 'relative';
-                            mock.style.top = '0';
-                            mock.style.left = '0';
                         }
                     }
                 });
 
-                if (!canvas || canvas.width === 0 || canvas.height === 0) {
-                    throw new Error("Errore nel rendering: il canvas generato è vuoto o ha dimensioni nulle.");
+                // RIPRISTINIAMO IL DOM ORIGINALE (Rimuoviamo le immagini temporanee)
+                tempImages.forEach(({ img, canv }) => {
+                    img.remove();
+                    canv.style.display = "";
+                });
+
+                if (!canvas || canvas.width === 0) {
+                    throw new Error("Il rendering ha generato un'immagine nulla.");
                 }
 
                 const imgData = canvas.toDataURL('image/png', 1.0);
                 const { jsPDF } = window.jspdf;
 
-                // PDF Setup: A4 format
                 const pdfWidth = 595.28;
                 const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
                 const pdf = new jsPDF({ 
@@ -2603,10 +2624,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
 
                 pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight, undefined, 'FAST');
-                const fileName = `${title}.pdf`;
-
-                // Standard Save (More reliable on some GitHub Pages setups than the Picker API)
-                pdf.save(fileName);
+                pdf.save(`${title}.pdf`);
                 
             } catch (e) {
                 Utils.logError("Errore critico durante l'esportazione PDF", e);
