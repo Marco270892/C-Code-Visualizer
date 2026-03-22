@@ -638,10 +638,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const ProjectManager = {
         async export() {
             const data = {
-                version: "2.5",
+                version: "2.6.7",
                 timestamp: Date.now(),
                 mode: State.mode,
-                title: UI.inputs.title.value,
+                title: UI.inputs.title.value || "Senza Titolo",
                 school: UI.inputs.school.value,
                 student: UI.inputs.student.value,
                 date: UI.inputs.date.value,
@@ -671,11 +671,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             };
 
-            const fileName = `${UI.inputs.title.value}_progetto.lab`;
+            const fileName = (UI.inputs.title.value || "progetto").replace(/[^a-z0-9]/gi, '_').toLowerCase() + ".lab";
             const jsonText = JSON.stringify(data, null, 2);
 
             // Attempt to use the modern File System Access API (Save As dialog)
-            if ('showSaveFilePicker' in window) {
+            if ('showSaveFilePicker' in window && window.isSecureContext) {
                 try {
                     const handle = await window.showSaveFilePicker({
                         suggestedName: fileName,
@@ -689,20 +689,24 @@ document.addEventListener('DOMContentLoaded', () => {
                     await writable.close();
                     return; // Success
                 } catch (err) {
-                    // AbortError means user cancelled, so we just stop.
                     if (err.name === 'AbortError') return;
                     console.warn("showSaveFilePicker failed, falling back to download link.", err);
                 }
             }
 
-            // Fallback for older browsers or non-HTTPS contexts
-            const blob = new Blob([jsonText], { type: 'application/json' });
+            // Fallback: More robust download link
+            const blob = new Blob([jsonText], { type: 'application/octet-stream' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
+            a.style.display = 'none';
             a.href = url;
             a.download = fileName;
+            document.body.appendChild(a);
             a.click();
-            URL.revokeObjectURL(url);
+            setTimeout(() => {
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+            }, 100);
         },
 
         import(file) {
@@ -2500,64 +2504,86 @@ document.addEventListener('DOMContentLoaded', () => {
             btns.forEach(b => { if (b) { b.disabled = true; b.textContent = "Generazione..."; } });
 
             try {
+                // Ensure everything is ready
                 await document.fonts.ready;
-                await new Promise(r => setTimeout(r, 500));
+                
+                // Extra time for Chart.js and MathJax animations to settle
+                await new Promise(r => setTimeout(r, 1200));
 
                 const title = prompt("Titolo file PDF:", UI.inputs.title.value) || "Documento";
                 const element = document.querySelector('.pdf-page-mock');
 
-                // Forza MathJax v2 a finire il rendering
+                // Forza MathJax v2 a finire il rendering se presente
                 if (window.MathJax && window.MathJax.Hub) {
                     await new Promise(resolve => {
                         window.MathJax.Hub.Queue(["Typeset", window.MathJax.Hub, element], resolve);
                     });
                 }
 
-                // Attendi un attimo extra per la stabilità grafica
-                await new Promise(r => setTimeout(r, 1000));
+                // Verify and fix canvas dimensions within the mock
+                element.querySelectorAll('canvas').forEach(canv => {
+                    const style = window.getComputedStyle(canv);
+                    const drawWidth = parseInt(style.width) || canv.width || 600;
+                    const drawHeight = parseInt(style.height) || canv.height || 300;
+                    
+                    if (canv.width === 0 || isNaN(canv.width)) canv.width = drawWidth;
+                    if (canv.height === 0 || isNaN(canv.height)) canv.height = drawHeight;
+                });
 
-                // NUOVO: Attendi che tutte le immagini nel mock (logo, screenshot) siano caricate
+                // Wait for all images in the mock (logo, screenshots) to be fully loaded
                 const images = element.querySelectorAll('img');
-                const imagePromises = Array.from(images).map(img => {
+                await Promise.all(Array.from(images).map(img => {
                     if (img.complete) return Promise.resolve();
                     return new Promise(resolve => {
                         img.onload = img.onerror = resolve;
                     });
-                });
-                await Promise.all(imagePromises);
+                }));
 
+                // Ensure the view is stable
                 window.scrollTo(0, 0);
 
-                // SICUREZZA: Verifica che tutti i canvas nel mock abbiano dimensioni valide > 0
-                // Errore creato da html2canvas v1.4.1 se trova canvas a 0x0
-                element.querySelectorAll('canvas').forEach(canv => {
-                    if (canv.width === 0) canv.width = 300;
-                    if (canv.height === 0) canv.height = 150;
-                });
-
+                // Use robust html2canvas options
                 const canvas = await html2canvas(element, {
                     scale: 2,
                     backgroundColor: '#1e293b',
                     useCORS: true,
                     logging: false,
-                    allowTaint: false, // Disabilitato per evitare problemi di sicurezza/canvas
-                    scrollY: -window.scrollY,
-                    windowWidth: document.documentElement.offsetWidth,
-                    windowHeight: document.documentElement.offsetHeight
+                    allowTaint: false,
+                    scrollX: 0,
+                    scrollY: 0,
+                    width: element.offsetWidth,
+                    height: element.offsetHeight,
+                    onclone: (clonedDoc) => {
+                        // Ensure the cloned element is visible and stable for rendering
+                        const clonedElement = clonedDoc.querySelector('.pdf-page-mock');
+                        if (clonedElement) {
+                            clonedElement.style.transform = 'none';
+                            clonedElement.style.margin = '0';
+                        }
+                    }
                 });
+
+                if (!canvas || canvas.width === 0 || canvas.height === 0) {
+                    throw new Error("Errore nel rendering: il canvas generato è vuoto.");
+                }
 
                 const imgData = canvas.toDataURL('image/png');
                 const { jsPDF } = window.jspdf;
 
-                const pdfWidth = 595;
+                // PDF Setup: A4 format at 72dpi is 595x842pt
+                const pdfWidth = 595.28;
                 const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-                const pdf = new jsPDF({ unit: 'pt', format: [pdfWidth, pdfHeight] });
+                const pdf = new jsPDF({ 
+                    orientation: pdfHeight > pdfWidth ? 'p' : 'l',
+                    unit: 'pt', 
+                    format: [pdfWidth, pdfHeight] 
+                });
 
-                pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+                pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight, undefined, 'FAST');
                 const fileName = `${title}.pdf`;
 
-                // Attempt to use the modern File System Access API (Save As dialog)
-                if ('showSaveFilePicker' in window) {
+                // Modern Save Picker
+                if ('showSaveFilePicker' in window && window.isSecureContext) {
                     try {
                         const handle = await window.showSaveFilePicker({
                             suggestedName: fileName,
@@ -2567,23 +2593,21 @@ document.addEventListener('DOMContentLoaded', () => {
                             }],
                         });
                         const writable = await handle.createWritable();
-                        // Get PDF as blob to save it via the picker
                         const pdfBlob = pdf.output('blob');
                         await writable.write(pdfBlob);
                         await writable.close();
-                        return; // Success
+                        return; // Done
                     } catch (err) {
-                        // AbortError means user cancelled
                         if (err.name === 'AbortError') return;
-                        console.warn("showSaveFilePicker failed, falling back to simple save.", err);
+                        console.warn("Picker failed, using fallback.", err);
                     }
                 }
 
-                // Fallback: Automatic download in 'Downloads' folder
+                // Standard Fallback
                 pdf.save(fileName);
             } catch (e) {
-                console.error("PDF Error:", e);
-                alert("Ops! Errore generazione PDF. Dettagli: " + e.message);
+                console.error("PDF Export Critical Error:", e);
+                alert("Errore durante l'esportazione PDF: " + e.message + "\n\nSuggerimento: prova a ricaricare la pagina o a ridurre la dimensione degli screenshot.");
             } finally {
                 btns.forEach(b => {
                     if (b) {
@@ -2592,7 +2616,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 });
             }
-        }
+        },
     };
 
     // ==========================================
