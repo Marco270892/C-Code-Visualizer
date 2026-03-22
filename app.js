@@ -2581,10 +2581,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // Catturiamo il DOM (freeze&capture)
                 const canvas = await html2canvas(element, {
-                    scale: 1.5, // Leggermente diminuito per stabilità su GitHub
+                    scale: 2, // Ripristinato per qualità (Deep Clean lo rende sicuro)
                     backgroundColor: '#1e293b',
                     useCORS: true,
-                    logging: false,
+                    logging: true, // Vedere i dettagli in console se serve ancora
                     allowTaint: false,
                     scrollX: 0,
                     scrollY: 0,
@@ -2592,20 +2592,20 @@ document.addEventListener('DOMContentLoaded', () => {
                     height: element.offsetHeight,
                     x: 0,
                     y: 0,
-                    // ISTRUZIONE CRITICA: Disabilita foreignObjectRendering per evitare bug con le formule MathJax
                     foreignObjectRendering: false,
-                    // ISTRUZIONE CRITICA: Ignora TUTTI i canvas (scansioniamo il clone per essere sicuri)
-                    ignoreElements: (el) => {
-                        return el.tagName === 'CANVAS';
-                    },
                     onclone: (clonedDoc) => {
                         const mock = clonedDoc.querySelector('.pdf-page-mock');
                         if (mock) {
                             mock.style.transform = 'none';
                             mock.style.margin = '0';
                             mock.style.position = 'relative';
-                            // Rimuovi eventuali SVG di MathJax che potrebbero causare crash se troppo complessi?
-                            // No, li lasciamo ma forziamo la visibilità.
+
+                            // PULIZIA PROFONDA: Rimuovi QUALSIASI canvas rimasto o SVG vuoto per sicurezza
+                            clonedDoc.querySelectorAll('canvas').forEach(c => c.remove());
+                            // Rimuovi elementi MathJax che hanno larghezza 0
+                            clonedDoc.querySelectorAll('.MathJax_SVG').forEach(svg => {
+                                if (svg.offsetWidth === 0) svg.remove();
+                            });
                         }
                     }
                 });
