@@ -1,6 +1,6 @@
 /**
  * PROGRAMMA PER SALVATAGGIO CODICE C E RELAZIONI DI LABORATORIO
- * Versione 2.0 - Supporto Multi-file, Screenshot e Flowchart
+ * Versione 2.0.1 - Fix esportazione PDF (createPattern 0x0 su GitHub Pages)
  */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -2579,37 +2579,78 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Posiziona la vista all'inizio
                 window.scrollTo(0, 0);
 
+                // --- MONKEY-PATCH: Protegge createPattern da canvas 0x0 (bug html2canvas su GitHub Pages) ---
+                // html2canvas 1.4.1 lancia un'eccezione nativa quando tenta di usare createPattern
+                // su un canvas con width o height = 0 (generati da SVG/Raphael nel documento clonato).
+                // Questa patch sostituisce temporaneamente il metodo con una versione sicura.
+                const _origCreatePattern = CanvasRenderingContext2D.prototype.createPattern;
+                CanvasRenderingContext2D.prototype.createPattern = function(image, repetition) {
+                    try {
+                        if (image && ((image.width === 0 || image.height === 0) ||
+                            (image instanceof HTMLCanvasElement && (image.width === 0 || image.height === 0)))) {
+                            return null;
+                        }
+                        return _origCreatePattern.call(this, image, repetition);
+                    } catch (e) {
+                        console.warn('[PDF] createPattern ignorato su canvas 0x0:', e.message);
+                        return null;
+                    }
+                };
+
                 // Catturiamo il DOM (freeze&capture)
                 // Usiamo opzioni specifiche per GitHub Pages (HTTPS/CORS)
-                const canvas = await html2canvas(element, {
-                    scale: 2,
-                    backgroundColor: '#1e293b',
-                    useCORS: true,
-                    allowTaint: false,
-                    logging: false,
-                    scrollX: 0,
-                    scrollY: 0,
-                    width: element.offsetWidth,
-                    height: element.offsetHeight,
-                    x: 0,
-                    y: 0,
-                    removeContainer: true, // Pulisce il DOM temporaneo creato dalla libreria
-                    foreignObjectRendering: false,
-                    onclone: (clonedDoc) => {
-                        const mock = clonedDoc.querySelector('.pdf-page-mock');
-                        if (mock) {
-                            mock.style.transform = 'none';
-                            mock.style.margin = '0';
-                            mock.style.position = 'relative';
+                let canvas;
+                try {
+                    canvas = await html2canvas(element, {
+                        scale: 2,
+                        backgroundColor: '#1e293b',
+                        useCORS: true,
+                        allowTaint: false,
+                        logging: false,
+                        scrollX: 0,
+                        scrollY: 0,
+                        width: element.offsetWidth,
+                        height: element.offsetHeight,
+                        x: 0,
+                        y: 0,
+                        removeContainer: true,
+                        foreignObjectRendering: false,
+                        onclone: (clonedDoc) => {
+                            const mock = clonedDoc.querySelector('.pdf-page-mock');
+                            if (mock) {
+                                mock.style.transform = 'none';
+                                mock.style.margin = '0';
+                                mock.style.position = 'relative';
 
-                            // PULIZIA PROFONDA: Rimuovi QUALSIASI canvas rimasto o SVG anomalo
-                            clonedDoc.querySelectorAll('canvas').forEach(c => c.remove());
-                            clonedDoc.querySelectorAll('svg').forEach(svg => {
-                                if (svg.getBBox && svg.getBBox().width === 0) svg.remove();
-                            });
+                                // PULIZIA PROFONDA: rimuovi TUTTI i canvas rimasti nel clone.
+                                // Non usiamo getBBox() perché non funziona su documenti distaccati dal DOM.
+                                clonedDoc.querySelectorAll('canvas').forEach(c => {
+                                    // Se il canvas ha dimensioni 0 o è invisibile, rimuovilo del tutto
+                                    if (c.width === 0 || c.height === 0 ||
+                                        c.style.display === 'none' || c.offsetParent === null) {
+                                        c.remove();
+                                    } else {
+                                        // Forza dimensioni minime per evitare il bug
+                                        if (c.width < 1) c.width = 1;
+                                        if (c.height < 1) c.height = 1;
+                                    }
+                                });
+
+                                // Rimuovi SVG con dimensioni 0 o senza viewBox/width validi
+                                clonedDoc.querySelectorAll('svg').forEach(svg => {
+                                    const w = parseFloat(svg.getAttribute('width') || svg.style.width || '0');
+                                    const h = parseFloat(svg.getAttribute('height') || svg.style.height || '0');
+                                    if (w === 0 || h === 0 || (!svg.getAttribute('width') && !svg.getAttribute('viewBox'))) {
+                                        svg.remove();
+                                    }
+                                });
+                            }
                         }
-                    }
-                });
+                    });
+                } finally {
+                    // RIPRISTINA sempre il createPattern originale
+                    CanvasRenderingContext2D.prototype.createPattern = _origCreatePattern;
+                }
 
                 // RIPRISTINIAMO IL DOM ORIGINALE (Rimuoviamo le immagini temporanee)
                 tempImages.forEach(({ img, canv }) => {
