@@ -1,9 +1,49 @@
 /**
  * PROGRAMMA PER SALVATAGGIO CODICE C E RELAZIONI DI LABORATORIO
- * Versione 2.0.1 - Fix esportazione PDF (createPattern 0x0 su GitHub Pages)
+ * Versione 3.0.0 - PDF via Print Window (MathJax nativo, testo selezionabile, formule corrette)
  */
 
 document.addEventListener('DOMContentLoaded', () => {
+
+    // Protezione globale preventiva contro bug "createPattern/drawImage on canvas with width/height 0"
+    (function installGlobalCanvasProtection() {
+        if (typeof CanvasRenderingContext2D === 'undefined') return;
+        const proto = CanvasRenderingContext2D.prototype;
+        const origPattern = proto.createPattern;
+        const origDraw = proto.drawImage;
+
+        proto.createPattern = function(image, repetition) {
+            if (!image || image.width === 0 || image.height === 0 ||
+                (image.naturalWidth !== undefined && image.naturalWidth === 0) ||
+                (image.videoWidth !== undefined && image.videoWidth === 0)) {
+                const dummy = document.createElement('canvas');
+                dummy.width = 1;
+                dummy.height = 1;
+                return origPattern.call(this, dummy, repetition || 'no-repeat');
+            }
+            try {
+                return origPattern.call(this, image, repetition);
+            } catch (e) {
+                const dummy = document.createElement('canvas');
+                dummy.width = 1;
+                dummy.height = 1;
+                return origPattern.call(this, dummy, repetition || 'no-repeat');
+            }
+        };
+
+        proto.drawImage = function(image, ...args) {
+            if (!image) return;
+            if (image.width === 0 || image.height === 0 ||
+                (image.naturalWidth !== undefined && image.naturalWidth === 0)) {
+                return;
+            }
+            try {
+                return origDraw.apply(this, [image, ...args]);
+            } catch (e) {
+                // Silently ignore 0-dimension drawing
+            }
+        };
+    })();
 
     // ==========================================
     // 1. STATO DELL'APPLICAZIONE (Dati Interni)
@@ -153,11 +193,29 @@ document.addEventListener('DOMContentLoaded', () => {
             errorOverlay.style.cssText = 'position:fixed; top:20px; left:20px; right:20px; background:#ef4444; color:white; padding:15px; border-radius:8px; z-index:9999; box-shadow:0 10px 30px rgba(0,0,0,0.5); font-family:monospace; font-size:12px;';
             errorOverlay.innerHTML = `<strong>⚠️ Errore di Sistema:</strong><br>${msg}<br><br><small>${err ? (err.message || err) : ''}</small><br><br><button onclick="this.parentElement.remove()" style="background:white; color:#ef4444; border:none; padding:5px 10px; border-radius:4px; cursor:pointer;">Chiudi</button>`;
             document.body.appendChild(errorOverlay);
+        },
+        escapeHtml(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
         }
     };
 
-    // Global Error Handler for GitHub Debugging
+
+    // Global Error Handler
+    // Ignora 'Script error.' cross-origin (da librerie CDN esterne — MathJax, Chart.js, etc.)
+    // che il browser maschera per sicurezza quando caricati da origini diverse.
     window.onerror = function(message, source, lineno, colno, error) {
+        if (!message || message === 'Script error.' || message === 'Script error') return true;
+        // Ignora errori da CDN esterni
+        if (source && (source.includes('cdnjs.cloudflare.com') ||
+                       source.includes('cdn.jsdelivr.net') ||
+                       source.includes('fonts.googleapis.com') ||
+                       source.includes('mathjax'))) return true;
         Utils.logError("Errore imprevisto rilevato: " + message, error);
         return false;
     };
@@ -180,10 +238,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     lineWrapping: true
                 });
 
-                // Link editor changes to application state
+                // Link editor changes to application state (aggiornamento real-time mirato e ultraveloce)
                 State.editor.on('change', () => {
                     this.updateCurrentContent(State.editor.getValue());
-                    Renderer.updateAll();
+                    Renderer.renderFiles(State.mode);
+                    Storage.save();
                 });
             }
 
@@ -919,22 +978,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         load(mode) {
             let prefix = 'c-';
-            let defaultTitle = 'Codice Sorgente C';
 
-            if (mode === 'lab') {
-                prefix = 'l-';
-                defaultTitle = 'Relazione di Laboratorio';
-            }
-            if (mode === 'flowchart') {
-                prefix = 'f-';
-                defaultTitle = 'Diagramma di Flusso';
-            }
-            if (mode === 'plc') {
-                prefix = 'p-';
-                defaultTitle = 'Progetto PLC (LAD/SCL)';
-            }
+            if (mode === 'lab') prefix = 'l-';
+            if (mode === 'flowchart') prefix = 'f-';
+            if (mode === 'plc') prefix = 'p-';
 
-            // Carica Dati Comuni
+            // Carica Dati Comuni: non forzare testo finto, lascia vuoto se non salvato
             UI.inputs.school.value = localStorage.getItem('shared-school') || '';
             UI.inputs.student.value = localStorage.getItem('shared-student') || '';
             UI.inputs.date.value = localStorage.getItem('shared-date') || '';
@@ -946,7 +995,7 @@ document.addEventListener('DOMContentLoaded', () => {
             ScreenshotManager.renderList();
 
             // Carica Dati Specifici
-            UI.inputs.title.value = localStorage.getItem(prefix + 'title') || defaultTitle;
+            UI.inputs.title.value = localStorage.getItem(prefix + 'title') || '';
             UI.inputs.exercise.value = localStorage.getItem(prefix + 'exercise') || '';
             UI.inputs.flowchart.value = localStorage.getItem(prefix + 'flowchart') || '';
 
@@ -1095,45 +1144,129 @@ document.addEventListener('DOMContentLoaded', () => {
                 sectionDiv.appendChild(contentDiv);
                 container.appendChild(sectionDiv);
 
-                // Trigger MathJax for conclusions (v2 style)
-                if (window.MathJax && window.MathJax.Hub) {
-                    window.MathJax.Hub.Queue(["Typeset", window.MathJax.Hub, container]);
-                }
+                // Trigger MathJax con debounce e solo se contiene $
+                this.queueMathJax(container);
             }
         },
 
-        renderHeader() {
-            if (UI.inputs.title) UI.preview.title.textContent = UI.inputs.title.value;
-            if (UI.inputs.school) UI.preview.school.textContent = UI.inputs.school.value;
-            if (UI.inputs.student) UI.preview.student.textContent = UI.inputs.student.value;
-
-            if (UI.inputs.date && UI.inputs.date.value) {
-                const d = new Date(UI.inputs.date.value);
-                UI.preview.date.textContent = d.toLocaleDateString('it-IT');
-            } else { UI.preview.date.textContent = ""; }
-
-            // Logo
-            UI.preview.logo.innerHTML = '';
-            if (State.logoBase64) {
-                const img = document.createElement('img');
-                img.src = State.logoBase64;
-                UI.preview.logo.appendChild(img);
-                if (UI.inputs.logoStatus) {
-                    UI.inputs.logoStatus.textContent = "Caricato ✓";
-                    UI.inputs.logoStatus.style.color = "#38bdf8";
+        _mathJaxTimer: null,
+        queueMathJax(container) {
+            if (!container) return;
+            const text = container.textContent || '';
+            const hasMath = text.includes('$') || text.includes('\\(') || text.includes('\\[') || text.includes('\\sqrt') || text.includes('\\frac');
+            if (!hasMath) return;
+            clearTimeout(this._mathJaxTimer);
+            this._mathJaxTimer = setTimeout(() => {
+                try {
+                    if (window.MathJax && window.MathJax.Hub) {
+                        window.MathJax.Hub.Queue(["Typeset", window.MathJax.Hub, container]);
+                    }
+                } catch (e) {
+                    console.warn("MathJax Typeset error:", e);
                 }
-            } else {
-                if (UI.inputs.logoStatus) {
-                    UI.inputs.logoStatus.textContent = "Mancante";
-                    UI.inputs.logoStatus.style.color = "";
+            }, 300);
+        },
+
+        renderHeader() {
+            const schoolVal = UI.inputs.school ? UI.inputs.school.value.trim() : '';
+            const studentVal = UI.inputs.student ? UI.inputs.student.value.trim() : '';
+            const titleVal = UI.inputs.title ? UI.inputs.title.value.trim() : '';
+
+            let dateFormatted = '';
+            if (UI.inputs.date && UI.inputs.date.value) {
+                try {
+                    const parts = UI.inputs.date.value.split('-');
+                    if (parts.length === 3) {
+                        dateFormatted = `${parts[2]}/${parts[1]}/${parts[0]}`;
+                    } else {
+                        dateFormatted = new Date(UI.inputs.date.value).toLocaleDateString('it-IT');
+                    }
+                } catch {
+                    dateFormatted = UI.inputs.date.value;
                 }
             }
 
-            // Traccia/Esercizio
+            // Titolo Documento
+            const titleBox = document.querySelector('.pdf-main-title');
+            if (UI.preview.title) {
+                if (titleVal) {
+                    UI.preview.title.textContent = titleVal;
+                    if (titleBox) titleBox.style.display = '';
+                } else {
+                    UI.preview.title.textContent = '';
+                    if (titleBox) titleBox.style.display = 'none';
+                }
+            }
+
+            // Scuola / Istituto (nessun placeholder di default)
+            if (UI.preview.school) {
+                if (schoolVal) {
+                    UI.preview.school.innerHTML = `<strong style="font-size:1.05rem;font-weight:700;color:#ffffff;letter-spacing:-0.01em;">${schoolVal}</strong>`;
+                    UI.preview.school.style.display = '';
+                } else {
+                    UI.preview.school.innerHTML = '';
+                    UI.preview.school.style.display = 'none';
+                }
+            }
+
+            // Studente / Autore (nessun placeholder di default)
+            if (UI.preview.student) {
+                if (studentVal) {
+                    UI.preview.student.innerHTML = `<span style="font-size:0.9rem;color:#8fa3c0;font-weight:400;">${studentVal}</span>`;
+                    UI.preview.student.style.display = '';
+                } else {
+                    UI.preview.student.innerHTML = '';
+                    UI.preview.student.style.display = 'none';
+                }
+            }
+
+            // Data (non mostrare se vuota)
+            if (UI.preview.date) {
+                if (dateFormatted) {
+                    UI.preview.date.innerHTML = `<span style="font-size:0.82rem;color:#5d7a9a;">${dateFormatted}</span>`;
+                    UI.preview.date.style.display = '';
+                } else {
+                    UI.preview.date.innerHTML = '';
+                    UI.preview.date.style.display = 'none';
+                }
+            }
+
+            // Logo (non mostrare badge DOC·FORGE se non caricato)
+            if (UI.preview.logo) {
+                UI.preview.logo.innerHTML = '';
+                if (State.logoBase64) {
+                    const img = document.createElement('img');
+                    img.src = State.logoBase64;
+                    img.alt = 'Logo';
+                    UI.preview.logo.appendChild(img);
+                    UI.preview.logo.style.display = '';
+                    if (UI.inputs.logoStatus) {
+                        UI.inputs.logoStatus.textContent = "Caricato ✓";
+                        UI.inputs.logoStatus.style.color = "#38bdf8";
+                    }
+                } else {
+                    UI.preview.logo.style.display = 'none';
+                    if (UI.inputs.logoStatus) {
+                        UI.inputs.logoStatus.textContent = "Mancante";
+                        UI.inputs.logoStatus.style.color = "";
+                    }
+                }
+            }
+
+            // Se non c'è nessun dato nell'header, nascondi l'intera barra
+            const headerContainer = document.querySelector('.pdf-custom-header');
+            if (headerContainer) {
+                const hasHeader = State.logoBase64 || schoolVal || studentVal || dateFormatted;
+                headerContainer.style.display = hasHeader ? 'flex' : 'none';
+            }
+
+            // Traccia / Esercizio
             if (UI.inputs.exercise && UI.inputs.exercise.value.trim()) {
                 UI.preview.exerciseDisplay.innerHTML = Parser.markdown(UI.inputs.exercise.value);
                 UI.preview.exerciseContainer.classList.remove('hidden');
-            } else { UI.preview.exerciseContainer.classList.add('hidden'); }
+            } else {
+                UI.preview.exerciseContainer.classList.add('hidden');
+            }
         },
 
         renderLab(mode) {
@@ -1198,10 +1331,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 container.appendChild(chartsWrapper);
             }
 
-            // Trigger MathJax if needed (v2 style)
-            if (window.MathJax && window.MathJax.Hub) {
-                window.MathJax.Hub.Queue(["Typeset", window.MathJax.Hub, container]);
-            }
+            // Trigger MathJax con debounce e solo se contiene $
+            this.queueMathJax(container);
         },
 
         renderFiles(mode) {
@@ -1209,22 +1340,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (mode === 'code' || mode === 'plc') {
 
-                // Extra header for PLC
-                if (mode === 'plc') {
-                    const plcInfo = document.createElement('div');
-                    plcInfo.className = 'pdf-lab-section';
-                    plcInfo.style.marginBottom = '20px';
-                    plcInfo.innerHTML = `
-                        <div class="pdf-lab-label">Dettagli PLC:</div>
-                        <div style="padding-left: 5px;">
-                            <strong>CPU:</strong> ${UI.plcInputs.cpu.value || 'N/A'} <br>
-                            <strong>Ambiente:</strong> ${UI.plcInputs.env.value || 'N/A'}
-                        </div>
-                     `;
-                    UI.preview.codeContainer.appendChild(plcInfo);
+                // Extra header for PLC (solo se compilato)
+                if (mode === 'plc' && UI.plcInputs) {
+                    const cpu = UI.plcInputs.cpu && UI.plcInputs.cpu.value ? UI.plcInputs.cpu.value.trim() : '';
+                    const env = UI.plcInputs.env && UI.plcInputs.env.value ? UI.plcInputs.env.value.trim() : '';
+                    if (cpu || env) {
+                        const plcInfo = document.createElement('div');
+                        plcInfo.className = 'pdf-lab-section';
+                        plcInfo.style.marginBottom = '20px';
+                        let inner = '<div class="pdf-lab-label">Dettagli PLC:</div><div style="padding-left: 5px;">';
+                        if (cpu) inner += `<strong>CPU:</strong> ${cpu}<br>`;
+                        if (env) inner += `<strong>Ambiente:</strong> ${env}`;
+                        inner += '</div>';
+                        plcInfo.innerHTML = inner;
+                        UI.preview.codeContainer.appendChild(plcInfo);
+                    }
                 }
 
                 State.files.forEach(file => {
+                    if (!file.content || !file.content.trim()) return;
+
                     const fileBlock = document.createElement('div');
                     fileBlock.style.marginBottom = '25px';
 
@@ -1239,10 +1374,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     // Blocco Codice
                     const pre = document.createElement('pre');
                     const code = document.createElement('code');
-                    // Use 'clike' or 'c' which is close enough for simple ST/SCL highlighting if specific one missing
-                    code.className = mode === 'plc' ? 'language-pascal' : 'language-c';
-                    // Note: Prism usually needs 'pascal' for ST-like syntax, falling back to C if not available or just text.
-                    // Since we only loaded c, we stick to c or plain. Let's use 'diff' or 'c' for now.
                     code.className = 'language-c';
                     code.textContent = file.content;
 
@@ -2504,180 +2635,547 @@ document.addEventListener('DOMContentLoaded', () => {
 
         async generatePDF() {
             const btns = UI.btns.download;
-
-            if (!window.html2canvas) {
-                Utils.logError("Libreria html2canvas non trovata. Verifica la connessione.");
-                return;
-            }
-            if (!window.jspdf) {
-                Utils.logError("Libreria jsPDF non trovata. Verifica la connessione.");
-                return;
-            }
-
-            btns.forEach(b => { if (b) { b.disabled = true; b.textContent = "Generazione..."; } });
+            btns.forEach(b => { if (b) { b.disabled = true; b.textContent = "Preparazione..."; } });
 
             try {
-                // Sincronizza i dati e assicurati che tutto sia renderizzato
+                // Sincronizza rendering prima di raccogliere i dati
                 Renderer.updateAll();
-                await document.fonts.ready;
-                
-                // Attesa extra per garantire che Chart.js e MathJax abbiano finito le animazioni
-                await new Promise(r => setTimeout(r, 1500));
+                await new Promise(r => setTimeout(r, 400));
 
-                const title = prompt("Titolo file PDF:", UI.inputs.title.value) || "Documento";
-                const element = document.querySelector('.pdf-page-mock');
-                
-                if (!element) throw new Error("Anteprima PDF non trovata nel DOM.");
+                // ============================================================
+                // STRATEGIA: Print Window dedicata
+                // Costruiamo un documento HTML completo in una nuova finestra,
+                // carichiamo MathJax e Prism, poi chiamiamo window.print().
+                // Questo garantisce: testo selezionabile, formule MathJax perfette,
+                // codice colorato, immagini full-res e paginazione A4 nativa.
+                // ============================================================
 
-                // --- TECNICA "FREEZE & CAPTURE" ---
-                // Convertiamo tutti i canvas in immagini statiche temporanee per evitare l'errore "canvas with width 0"
-                const tempImages = [];
-                const canvases = element.querySelectorAll('canvas');
-                
-                canvases.forEach(canv => {
-                    const drawWidth = canv.offsetWidth || canv.width || 600;
-                    const drawHeight = canv.offsetHeight || canv.height || 300;
-                    
-                    if (canv.width === 0 || canv.height === 0) {
-                        canv.width = drawWidth;
-                        canv.height = drawHeight;
-                    }
-
+                const title   = (UI.inputs.title && UI.inputs.title.value.trim()) ? UI.inputs.title.value.trim() : "";
+                const school  = (UI.inputs.school && UI.inputs.school.value.trim()) ? UI.inputs.school.value.trim() : "";
+                const student = (UI.inputs.student && UI.inputs.student.value.trim()) ? UI.inputs.student.value.trim() : "";
+                const dateRaw = (UI.inputs.date && UI.inputs.date.value) ? UI.inputs.date.value : "";
+                let dateFormatted = "";
+                if (dateRaw) {
                     try {
-                        const dataUrl = canv.toDataURL('image/png');
+                        const parts = dateRaw.split('-');
+                        if (parts.length === 3) dateFormatted = `${parts[2]}/${parts[1]}/${parts[0]}`;
+                        else dateFormatted = new Date(dateRaw).toLocaleDateString('it-IT');
+                    } catch { dateFormatted = dateRaw; }
+                }
+
+                // --- Raccolta contenuti HTML dall'anteprima ---
+                const previewEl = document.querySelector('.pdf-page-mock');
+                if (!previewEl) throw new Error("Anteprima PDF non trovata nel DOM.");
+
+                // Cattura canvas (grafici, flowchart, circuito) come immagini base64
+                const canvasImgMap = new Map();
+                previewEl.querySelectorAll('canvas').forEach((canv, i) => {
+                    try {
+                        if (canv.width > 0 && canv.height > 0) {
+                            canvasImgMap.set(canv, canv.toDataURL('image/png'));
+                        }
+                    } catch (e) {}
+                });
+
+                // Clona il contenuto dell'anteprima, sostituendo canvas con img
+                const contentClone = previewEl.cloneNode(true);
+                const clonedCanvases = contentClone.querySelectorAll('canvas');
+                previewEl.querySelectorAll('canvas').forEach((origCanv, i) => {
+                    const dataUrl = canvasImgMap.get(origCanv);
+                    if (dataUrl && clonedCanvases[i]) {
                         const img = document.createElement('img');
                         img.src = dataUrl;
-                        img.className = "temp-pdf-img";
-                        img.style.width = drawWidth + "px";
-                        img.style.height = drawHeight + "px";
-                        img.style.display = "block";
-                        img.style.margin = "0 auto";
-                        
-                        // Sostituiamo temporaneamente il canvas con l'immagine
-                        canv.style.display = "none";
-                        canv.parentNode.insertBefore(img, canv);
-                        tempImages.push({ img, canv });
-                    } catch (e) {
-                        console.warn("Impossibile convertire canvas in immagine, provo a procedere.", e);
+                        img.style.maxWidth = '100%';
+                        img.style.height = 'auto';
+                        clonedCanvases[i].parentNode.replaceChild(img, clonedCanvases[i]);
                     }
                 });
 
-                // Forza MathJax v2 a finire il rendering se presente
-                if (window.MathJax && window.MathJax.Hub) {
-                    await new Promise(resolve => {
-                        window.MathJax.Hub.Queue(["Typeset", window.MathJax.Hub, element], resolve);
+                // Normalizza trasformazioni (reset scale del preview)
+                contentClone.style.transform = 'none';
+                contentClone.style.margin = '0';
+                contentClone.style.boxShadow = 'none';
+                contentClone.style.borderRadius = '0';
+
+                // Logo (non mostrare se non caricato)
+                const logoHtml = State.logoBase64
+                    ? `<div class="doc-logo"><img src="${State.logoBase64}" alt="Logo" style="max-height:75px;max-width:150px;object-fit:contain;"></div>`
+                    : '';
+
+                // Raccoglie HTML interno del mock (escludendo il wrapper stesso)
+                const innerHtml = contentClone.innerHTML;
+
+                // Prism: raccoglie i token colorati già nel DOM
+                // Per il codice sorgente, usa i dati State.files
+                let codeBlocksHtml = '';
+                if (State.mode === 'code' || State.mode === 'plc') {
+                    State.files.forEach(file => {
+                        if (!file.content || !file.content.trim()) return;
+                        codeBlocksHtml += `
+                        <div style="margin-bottom:22px;">
+                            <div style="font-size:0.68rem;font-weight:700;color:#38bdf8;text-transform:uppercase;letter-spacing:0.08em;padding:4px 8px;background:rgba(56,189,248,0.06);border-radius:4px 4px 0 0;border:1px solid rgba(56,189,248,0.15);border-bottom:none;display:inline-block;margin-bottom:0;">
+                                ${Utils.escapeHtml(file.name)}
+                            </div>
+                            <pre style="background:#0a1220;border-radius:0 6px 6px 6px;border:1px solid rgba(56,189,248,0.12);padding:14px;margin:0;overflow:visible;"><code class="language-c" style="font-family:'Fira Code','Cascadia Code',monospace;font-size:0.8rem;line-height:1.6;white-space:pre-wrap;word-break:break-all;display:block;">${Utils.escapeHtml(file.content)}</code></pre>
+                        </div>`;
                     });
                 }
 
-                // Attendiamo che le nuove immagini temporanee e quelle esistenti siano pronte
-                const images = element.querySelectorAll('img');
-                await Promise.all(Array.from(images).map(img => {
-                    if (img.complete) return Promise.resolve();
-                    return new Promise(resolve => { img.onload = img.onerror = resolve; });
-                }));
+                // Determina esercizio
+                const exerciseVal = (UI.inputs.exercise && UI.inputs.exercise.value.trim()) ? UI.inputs.exercise.value.trim() : '';
+                const exerciseHtml = exerciseVal ? `
+                    <div style="background:rgba(56,189,248,0.07);border:1px solid rgba(56,189,248,0.2);border-left:4px solid #38bdf8;border-radius:4px;padding:12px 16px;margin-bottom:20px;">
+                        <div style="font-size:0.68rem;font-weight:700;color:#38bdf8;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;">Traccia / Esercizio</div>
+                        <div style="font-size:0.88rem;color:#c0d4ec;line-height:1.7;">${Parser.markdown(exerciseVal)}</div>
+                    </div>` : '';
 
-                // Posiziona la vista all'inizio
-                window.scrollTo(0, 0);
-
-                // --- MONKEY-PATCH: Protegge createPattern da canvas 0x0 (bug html2canvas su GitHub Pages) ---
-                // html2canvas 1.4.1 lancia un'eccezione nativa quando tenta di usare createPattern
-                // su un canvas con width o height = 0 (generati da SVG/Raphael nel documento clonato).
-                // Questa patch sostituisce temporaneamente il metodo con una versione sicura.
-                const _origCreatePattern = CanvasRenderingContext2D.prototype.createPattern;
-                CanvasRenderingContext2D.prototype.createPattern = function(image, repetition) {
-                    try {
-                        if (image && ((image.width === 0 || image.height === 0) ||
-                            (image instanceof HTMLCanvasElement && (image.width === 0 || image.height === 0)))) {
-                            return null;
-                        }
-                        return _origCreatePattern.call(this, image, repetition);
-                    } catch (e) {
-                        console.warn('[PDF] createPattern ignorato su canvas 0x0:', e.message);
-                        return null;
-                    }
+                // Sezioni lab
+                const makeSection = (label, value) => {
+                    if (!value || !value.trim()) return '';
+                    return `<div style="margin-bottom:18px;">
+                        <div style="font-size:0.68rem;font-weight:700;color:#38bdf8;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;">${label}</div>
+                        <div style="font-size:0.88rem;color:#c0d4ec;line-height:1.7;padding-left:4px;">${Parser.markdown(value)}</div>
+                    </div>`;
                 };
 
-                // Catturiamo il DOM (freeze&capture)
-                // Usiamo opzioni specifiche per GitHub Pages (HTTPS/CORS)
-                let canvas;
-                try {
-                    canvas = await html2canvas(element, {
-                        scale: 2,
-                        backgroundColor: '#1e293b',
-                        useCORS: true,
-                        allowTaint: false,
-                        logging: false,
-                        scrollX: 0,
-                        scrollY: 0,
-                        width: element.offsetWidth,
-                        height: element.offsetHeight,
-                        x: 0,
-                        y: 0,
-                        removeContainer: true,
-                        foreignObjectRendering: false,
-                        onclone: (clonedDoc) => {
-                            const mock = clonedDoc.querySelector('.pdf-page-mock');
-                            if (mock) {
-                                mock.style.transform = 'none';
-                                mock.style.margin = '0';
-                                mock.style.position = 'relative';
+                let labHtml = '';
+                if (State.mode === 'lab') {
+                    labHtml += makeSection("Obiettivi:", UI.labInputs.objectives.value);
+                    labHtml += makeSection("Materiali:", UI.labInputs.materials.value);
+                    labHtml += makeSection("Strumenti e Hardware:", UI.labInputs.tools.value);
+                    labHtml += makeSection("Software:", UI.labInputs.software.value);
+                    labHtml += makeSection("Descrizione Attività:", UI.labInputs.description.value);
 
-                                // PULIZIA PROFONDA: rimuovi TUTTI i canvas rimasti nel clone.
-                                // Non usiamo getBBox() perché non funziona su documenti distaccati dal DOM.
-                                clonedDoc.querySelectorAll('canvas').forEach(c => {
-                                    // Se il canvas ha dimensioni 0 o è invisibile, rimuovilo del tutto
-                                    if (c.width === 0 || c.height === 0 ||
-                                        c.style.display === 'none' || c.offsetParent === null) {
-                                        c.remove();
-                                    } else {
-                                        // Forza dimensioni minime per evitare il bug
-                                        if (c.width < 1) c.width = 1;
-                                        if (c.height < 1) c.height = 1;
-                                    }
-                                });
+                    // Schema elettrico dal CircuitEditor
+                    if (window.CircuitEditor) {
+                        const circuitImg = CircuitEditor.getImage();
+                        if (circuitImg) {
+                            labHtml += `<div style="margin-bottom:18px;">
+                                <div style="font-size:0.68rem;font-weight:700;color:#38bdf8;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;">Schema Elettrico:</div>
+                                <img src="${circuitImg}" style="max-width:100%;border-radius:4px;border:1px solid rgba(255,255,255,0.1);">
+                            </div>`;
+                        }
+                    }
 
-                                // Rimuovi SVG con dimensioni 0 o senza viewBox/width validi
-                                clonedDoc.querySelectorAll('svg').forEach(svg => {
-                                    const w = parseFloat(svg.getAttribute('width') || svg.style.width || '0');
-                                    const h = parseFloat(svg.getAttribute('height') || svg.style.height || '0');
-                                    if (w === 0 || h === 0 || (!svg.getAttribute('width') && !svg.getAttribute('viewBox'))) {
-                                        svg.remove();
-                                    }
-                                });
-                            }
+                    labHtml += makeSection("Analisi e Calcoli:", UI.labInputs.calculations.value);
+
+                    // Grafici (cattura dal DOM anteprima)
+                    const chartsInPreview = previewEl.querySelectorAll('canvas');
+                    chartsInPreview.forEach(canv => {
+                        const dataUrl = canvasImgMap.get(canv);
+                        if (dataUrl) {
+                            labHtml += `<div style="margin-bottom:18px;text-align:center;">
+                                <img src="${dataUrl}" style="max-width:100%;border-radius:4px;border:1px solid rgba(255,255,255,0.08);">
+                            </div>`;
                         }
                     });
-                } finally {
-                    // RIPRISTINA sempre il createPattern originale
-                    CanvasRenderingContext2D.prototype.createPattern = _origCreatePattern;
+
+                    // Tabelle dati
+                    const tablesInPreview = previewEl.querySelectorAll('.pdf-data-table');
+                    tablesInPreview.forEach(tbl => {
+                        labHtml += `<div style="margin-bottom:18px;overflow-x:auto;">${tbl.outerHTML}</div>`;
+                    });
                 }
 
-                // RIPRISTINIAMO IL DOM ORIGINALE (Rimuoviamo le immagini temporanee)
-                tempImages.forEach(({ img, canv }) => {
-                    img.remove();
-                    canv.style.display = "";
+                // Screenshots
+                let screenshotsHtml = '';
+                if (State.screenshots && State.screenshots.length > 0) {
+                    const cols = parseInt(State.screenshotLayout || '2', 10);
+                    const colW = cols === 1 ? '100%' : cols === 3 ? '32%' : '48%';
+                    screenshotsHtml = `<div style="margin-bottom:20px;">
+                        <div style="font-size:0.68rem;font-weight:700;color:#38bdf8;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px;">Screenshot / Immagini:</div>
+                        <div style="display:flex;flex-wrap:wrap;gap:12px;justify-content:flex-start;">
+                            ${State.screenshots.map(s => `
+                                <div style="width:${colW};break-inside:avoid;">
+                                    <img src="${s.src}" style="width:100%;height:auto;object-fit:contain;border-radius:4px;border:1px solid rgba(255,255,255,0.1);display:block;">
+                                    ${s.caption ? `<div style="font-size:0.7rem;color:#6080a0;text-align:center;margin-top:4px;font-style:italic;">${Utils.escapeHtml(s.caption)}</div>` : ''}
+                                </div>`).join('')}
+                        </div>
+                    </div>`;
+                }
+
+                // Conclusioni
+                const conclusionsVal = (State.mode === 'lab' && UI.labInputs.conclusions && UI.labInputs.conclusions.value.trim()) ? UI.labInputs.conclusions.value.trim() : '';
+                const conclusionsHtml = conclusionsVal ? makeSection("Conclusioni:", conclusionsVal) : '';
+
+                // Flowchart SVG dall'anteprima
+                let flowchartHtml = '';
+                if (State.mode === 'flowchart') {
+                    const flowSvg = previewEl.querySelector('#pdf-flowchart-container svg, .pdf-flowchart-section svg');
+                    if (flowSvg) {
+                        flowchartHtml = `<div style="margin-bottom:20px;">
+                            <div style="font-size:0.68rem;font-weight:700;color:#38bdf8;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;">Diagramma di Flusso:</div>
+                            <div style="text-align:center;background:#111827;border-radius:6px;padding:16px;">${flowSvg.outerHTML}</div>
+                        </div>`;
+                    }
+                }
+
+                // PLC info (solo se compilato)
+                let plcHtml = '';
+                if (State.mode === 'plc' && UI.plcInputs) {
+                    const cpu = UI.plcInputs.cpu && UI.plcInputs.cpu.value ? UI.plcInputs.cpu.value.trim() : '';
+                    const env = UI.plcInputs.env && UI.plcInputs.env.value ? UI.plcInputs.env.value.trim() : '';
+                    if (cpu || env) {
+                        let inner = '';
+                        if (cpu) inner += `<strong>CPU:</strong> ${Utils.escapeHtml(cpu)}<br>`;
+                        if (env) inner += `<strong>Ambiente:</strong> ${Utils.escapeHtml(env)}`;
+                        plcHtml = `<div style="margin-bottom:20px;">
+                            <div style="font-size:0.68rem;font-weight:700;color:#38bdf8;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;">Dettagli PLC:</div>
+                            <div style="font-size:0.88rem;color:#c0d4ec;line-height:1.7;padding-left:4px;">${inner}</div>
+                        </div>`;
+                    }
+                }
+
+                // ===== Costruzione HTML documento stampa =====
+                const printHtml = `<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${Utils.escapeHtml(title)}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+    <script>
+        window.MathJax = {
+            tex: {
+                inlineMath: [['$','$'],['\\\\(','\\\\)']],
+                displayMath: [['$$','$$'],['\\\\[','\\\\]']]
+            },
+            svg: {
+                fontCache: 'none'
+            },
+            options: {
+                skipHtmlTags: ['script','noscript','style','textarea','pre']
+            }
+        };
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" id="MathJax-script" async></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        @page { size: A4; margin: 15mm 18mm; }
+        body {
+            font-family: 'Inter', 'Segoe UI', sans-serif;
+            background: #1a2540;
+            color: #dde8f8;
+            font-size: 11pt;
+            line-height: 1.65;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+        .page {
+            max-width: 100%;
+            background: #1a2540;
+            padding: 48px 56px;
+        }
+        /* MATHJAX SVG FORMULAS */
+        mjx-container[jax="SVG"] {
+            display: inline-block !important;
+            margin: 0 3px !important;
+            vertical-align: middle !important;
+            line-height: normal !important;
+        }
+        mjx-container[jax="SVG"][display="true"] {
+            display: block !important;
+            text-align: center !important;
+            margin: 14px 0 !important;
+        }
+        mjx-container[jax="SVG"] svg {
+            overflow: visible !important;
+            vertical-align: middle !important;
+        }
+        /* HEADER */
+        .doc-header {
+            display: flex;
+            align-items: center;
+            gap: 22px;
+            padding-bottom: 14px;
+            border-bottom: 2px solid rgba(56,189,248,0.35);
+            margin-bottom: 22px;
+        }
+        .doc-logo { flex-shrink: 0; }
+        .doc-logo img { max-height: 70px; max-width: 140px; object-fit: contain; border-radius: 4px; }
+        .doc-info { flex-grow: 1; display: flex; flex-direction: column; gap: 2px; }
+        .doc-school {
+            font-size: 1.08rem;
+            font-weight: 700;
+            color: #ffffff;
+            line-height: 1.3;
+            letter-spacing: -0.01em;
+        }
+        .doc-author {
+            font-size: 0.88rem;
+            color: #8fa3c0;
+            font-weight: 400;
+            line-height: 1.4;
+        }
+        .doc-date {
+            font-size: 0.8rem;
+            color: #5d7a9a;
+            margin-top: 2px;
+        }
+        /* TITLE */
+        .doc-title {
+            text-align: center;
+            font-size: 1.55rem;
+            font-weight: 800;
+            color: #e0eeff;
+            padding-bottom: 14px;
+            border-bottom: 1px solid rgba(255,255,255,0.09);
+            margin-bottom: 22px;
+        }
+        /* EXERCISE */
+        .exercise-box {
+            background: rgba(56,189,248,0.07);
+            border: 1px solid rgba(56,189,248,0.2);
+            border-left: 4px solid #38bdf8;
+            border-radius: 4px;
+            padding: 12px 16px;
+            margin-bottom: 20px;
+        }
+        .exercise-label { font-size: 0.65rem; font-weight: 700; color: #38bdf8; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
+        /* SECTIONS */
+        .section { margin-bottom: 16px; break-inside: avoid-page; }
+        .section-label { font-size: 0.65rem; font-weight: 700; color: #38bdf8; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 5px; }
+        .section-content { font-size: 0.88rem; color: #c0d4ec; line-height: 1.7; padding-left: 4px; }
+        /* CODE */
+        pre[class*="language-"] {
+            background: #0a1220 !important;
+            border: 1px solid rgba(56,189,248,0.12) !important;
+            border-radius: 0 6px 6px 6px !important;
+            padding: 12px !important;
+            margin: 0 0 16px !important;
+            overflow: visible !important;
+            white-space: pre-wrap !important;
+            word-break: break-all !important;
+        }
+        code[class*="language-"] {
+            font-family: 'Fira Code', 'Cascadia Code', monospace !important;
+            font-size: 0.78rem !important;
+            line-height: 1.6 !important;
+            white-space: pre-wrap !important;
+            word-break: break-all !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+        .file-header-label {
+            font-size: 0.65rem; font-weight: 700; color: #38bdf8;
+            text-transform: uppercase; letter-spacing: 0.08em;
+            padding: 4px 8px; background: rgba(56,189,248,0.06);
+            border-radius: 4px 4px 0 0; border: 1px solid rgba(56,189,248,0.12);
+            border-bottom: none; display: inline-block; margin-bottom: 0;
+        }
+        /* TABLES */
+        table { width: 100%; border-collapse: collapse; font-size: 0.82rem; margin-top: 8px; }
+        th { background: rgba(56,189,248,0.12) !important; color: #38bdf8; padding: 6px 10px; text-align: center; border: 1px solid rgba(56,189,248,0.2); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        td { padding: 5px 10px; border: 1px solid rgba(255,255,255,0.09); text-align: center; color: #c0d4ec; }
+        tr:nth-child(even) td { background: rgba(255,255,255,0.03) !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        /* IMAGES */
+        img { max-width: 100%; height: auto; display: block; }
+        .screenshot-grid { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
+        .screenshot-item { break-inside: avoid; }
+        /* PRINT */
+        @media print {
+            body { background: #1a2540 !important; }
+        }
+    </style>
+</head>
+<body>
+<div class="page" id="pdf-root">
+    ${(logoHtml || school || student || dateFormatted) ? `
+    <div class="doc-header">
+        ${logoHtml}
+        <div class="doc-info">
+            ${school ? `<div class="doc-school">${Utils.escapeHtml(school)}</div>` : ''}
+            ${student ? `<div class="doc-author">${Utils.escapeHtml(student)}</div>` : ''}
+            ${dateFormatted ? `<div class="doc-date">${Utils.escapeHtml(dateFormatted)}</div>` : ''}
+        </div>
+    </div>` : ''}
+
+    ${title ? `<div class="doc-title">${Utils.escapeHtml(title)}</div>` : ''}
+
+    ${exerciseHtml}
+    ${plcHtml}
+    ${labHtml}
+    ${codeBlocksHtml}
+    ${flowchartHtml}
+    ${screenshotsHtml}
+    ${conclusionsHtml}
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"><\/script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js"><\/script>
+<script>
+    if (window.Prism) Prism.highlightAll();
+<\/script>
+</body>
+</html>`;
+
+                // ── Crea iframe offscreen (scrittura diretta = stesso origin) ─
+                // NON usare iframe.src='about:blank': su file:// crea origin=null → cross-origin error.
+                // Scriviamo nel contentDocument PRIMA di qualsiasi navigazione.
+                const iframe = document.createElement('iframe');
+                iframe.style.cssText = [
+                    'position:fixed',
+                    'top:0',
+                    'left:-9999px',
+                    'width:794px',
+                    'height:1123px',
+                    'border:none',
+                    'visibility:hidden',
+                    'pointer-events:none',
+                    'z-index:-1'
+                ].join(';');
+                document.body.appendChild(iframe);
+
+                // Scrivi HTML direttamente nel documento iniziale (same-origin)
+                const iDoc = iframe.contentDocument;
+                iDoc.open();
+                iDoc.write(printHtml);
+                iDoc.close();
+
+                // Attendi load + MathJax tramite polling (evita postMessage cross-origin)
+                await new Promise(resolve => {
+                    const maxTimer = setTimeout(resolve, 9000);
+
+                    const pollMathJax = () => {
+                        try {
+                            const iWin = iframe.contentWindow;
+                            if (!iWin) { resolve(); return; }
+                            // Evidenzia codice con Prism se disponibile
+                            if (iWin.Prism) iWin.Prism.highlightAll();
+                            const mj = iWin.MathJax;
+                            if (mj && mj.startup && mj.startup.promise) {
+                                clearTimeout(maxTimer);
+                                mj.startup.promise
+                                    .then(() => setTimeout(resolve, 400))
+                                    .catch(() => setTimeout(resolve, 400));
+                            } else {
+                                // MathJax non ancora caricato, riprova
+                                setTimeout(pollMathJax, 250);
+                            }
+                        } catch(e) {
+                            resolve(); // fallback sicuro
+                        }
+                    };
+
+                    // Inizia polling dopo load event dell'iframe
+                    iframe.addEventListener('load', () => setTimeout(pollMathJax, 300), { once: true });
+                    // Fallback: se load non scatta entro 1s, polla comunque
+                    setTimeout(() => {
+                        if (iframe.contentDocument && iframe.contentDocument.readyState !== 'loading') {
+                            pollMathJax();
+                        }
+                    }, 1000);
                 });
 
-                if (!canvas || canvas.width === 0) {
-                    throw new Error("Il rendering ha generato un'immagine nulla.");
+                // Pausa extra per rendering finale (font, layout)
+                await new Promise(r => setTimeout(r, 600));
+
+                // Rendi l'iframe visibile (necessario per html2canvas)
+                iframe.style.top = '0';
+                iframe.style.left = '-9999px';
+                iframe.style.visibility = 'visible';
+
+                const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+                const pageRoot = iframeDoc.getElementById('pdf-root') || iframeDoc.body;
+
+                // Imposta la larghezza corretta per la cattura
+                iframe.style.height = pageRoot.scrollHeight + 'px';
+
+                btns.forEach(b => { if (b) b.textContent = "Rendering..."; });
+
+                // Protezione canvas anche nell'iframe
+                if (iframe.contentWindow && iframe.contentWindow.CanvasRenderingContext2D) {
+                    const iproto = iframe.contentWindow.CanvasRenderingContext2D.prototype;
+                    const _origDraw = iproto.drawImage;
+                    iproto.drawImage = function(img, ...args) {
+                        if (!img || img.width === 0 || img.height === 0) return;
+                        try { return _origDraw.apply(this, [img, ...args]); } catch(e) {}
+                    };
                 }
 
-                const imgData = canvas.toDataURL('image/png', 1.0);
+                // Normalizza SVG MathJax prima della cattura html2canvas:
+                // 1) Sostituisci fill/stroke="currentColor" con il colore computato del testo per non farli diventare neri in html2canvas
+                // 2) Imposta dimensioni esatte in px per evitare che le proporzioni dei vettori vengano sballate
+                iframeDoc.querySelectorAll('mjx-container[jax="SVG"] svg, svg').forEach(svg => {
+                    try {
+                        const parentEl = svg.closest('.section-content, .exercise-box, body') || svg;
+                        const comp = iframeDoc.defaultView ? iframeDoc.defaultView.getComputedStyle(parentEl) : null;
+                        const textColor = (comp && comp.color) ? comp.color : '#c0d4ec';
+
+                        svg.querySelectorAll('[fill="currentColor"]').forEach(el => el.setAttribute('fill', textColor));
+                        svg.querySelectorAll('[stroke="currentColor"]').forEach(el => el.setAttribute('stroke', textColor));
+                        if (svg.getAttribute('fill') === 'currentColor') svg.setAttribute('fill', textColor);
+                        if (svg.getAttribute('stroke') === 'currentColor') svg.setAttribute('stroke', textColor);
+                        svg.style.color = textColor;
+
+                        const rect = svg.getBoundingClientRect();
+                        if (rect.width > 0 && rect.height > 0) {
+                            svg.setAttribute('width', rect.width.toFixed(2));
+                            svg.setAttribute('height', rect.height.toFixed(2));
+                        }
+                    } catch (e) {}
+                });
+
+                const captureCanvas = await html2canvas(pageRoot, {
+                    scale: 2,
+                    backgroundColor: '#1a2540',
+                    useCORS: true,
+                    allowTaint: true,
+                    logging: false,
+                    width: pageRoot.scrollWidth,
+                    height: pageRoot.scrollHeight,
+                    windowWidth: 794,
+                    foreignObjectRendering: false,
+                });
+
+                // Rimuovi l'iframe dal DOM
+                document.body.removeChild(iframe);
+
+                if (!captureCanvas || captureCanvas.width === 0) {
+                    throw new Error("Cattura canvas fallita.");
+                }
+
+                btns.forEach(b => { if (b) b.textContent = "Generazione PDF..."; });
+
+                const imgData = captureCanvas.toDataURL('image/png', 1.0);
+
+                if (!window.jspdf) throw new Error("Libreria jsPDF non trovata.");
                 const { jsPDF } = window.jspdf;
 
-                const pdfWidth = 595.28;
-                const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-                const pdf = new jsPDF({ 
-                    orientation: pdfHeight > pdfWidth ? 'p' : 'l',
-                    unit: 'pt', 
-                    format: [pdfWidth, pdfHeight] 
+                const a4W = 595.28;
+                const totalH = (captureCanvas.height * a4W) / captureCanvas.width;
+
+                // PDF a foglio continuo: altezza dinamica esatta per contenere tutto il documento senza tagli
+                const pdf = new jsPDF({
+                    orientation: 'p',
+                    unit: 'pt',
+                    format: [a4W, totalH]
                 });
 
-                pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight, undefined, 'FAST');
-                pdf.save(`${title}.pdf`);
-                
+                pdf.addImage(imgData, 'PNG', 0, 0, a4W, totalH, undefined, 'FAST');
+
+                // Download diretto senza dialog
+                const rawTitle = (title || "Documento").trim();
+                const safeTitle = rawTitle.replace(/[/\\?%*:|"<>]/g, '_').trim() || "Documento";
+                const filename  = safeTitle.toLowerCase().endsWith('.pdf') ? safeTitle : `${safeTitle}.pdf`;
+
+                const blob    = pdf.output('blob');
+                const blobUrl = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = blobUrl;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                setTimeout(() => { a.remove(); URL.revokeObjectURL(blobUrl); }, 3000);
+
             } catch (e) {
-                Utils.logError("Errore critico durante l'esportazione PDF", e);
+                Utils.logError("Errore durante l'esportazione PDF: " + e.message, e);
+                // Rimuovi iframe orfano se presente
+                const orphan = document.querySelector('iframe[style*="-9999px"]');
+                if (orphan) orphan.remove();
             } finally {
                 btns.forEach(b => {
                     if (b) {
@@ -2687,6 +3185,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             }
         },
+
+
     };
 
     // ==========================================
